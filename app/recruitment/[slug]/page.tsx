@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { RecruitmentForm } from "@/components/RecruitmentForm";
-import dynamic from "next/dynamic";
-const GoldenParticles = dynamic(() => import("@/components/GoldenParticles").then((mod) => mod.GoldenParticles), { ssr: false });
+import { GoldenParticles } from "@/components/GoldenParticles";
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
@@ -10,7 +9,7 @@ import { Button } from "@/components/ui/button";
 export const revalidate = 60;
 
 export default async function RecruitmentPage({ params }: { params: { slug: string } }) {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Await the params properly as per warnings/errors in newer next configs
     const slug = params.slug;

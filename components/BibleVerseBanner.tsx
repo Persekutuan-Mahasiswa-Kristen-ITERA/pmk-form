@@ -15,8 +15,11 @@ export function BibleVerseBanner() {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
-        setVerse(verses[Math.floor(Math.random() * verses.length)]);
-        setMounted(true);
+        const id = requestAnimationFrame(() => {
+            setVerse(verses[Math.floor(Math.random() * verses.length)]);
+            setMounted(true);
+        });
+        return () => cancelAnimationFrame(id);
     }, []);
 
     // Prevent layout shift by rendering invisible placeholder if unmounted

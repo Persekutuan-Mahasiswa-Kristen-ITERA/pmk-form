@@ -20,6 +20,10 @@ const blessings = [
     "Tetaplah berakar di dalam Kristus dan dibangun di atas Dia 🙏",
 ];
 
+function randomBlessing() {
+    return blessings[Math.floor(Math.random() * blessings.length)];
+}
+
 export default function SuccessPage() {
     const params = useParams();
     const slug = params?.slug as string;
@@ -30,7 +34,9 @@ export default function SuccessPage() {
     const shouldReduceMotion = useReducedMotion();
 
     useEffect(() => {
-        setBlessing(blessings[Math.floor(Math.random() * blessings.length)]);
+        // Delay ke microtask agar setState tidak sinkron di dalam effect body
+        const id = requestAnimationFrame(() => setBlessing(randomBlessing()));
+        return () => cancelAnimationFrame(id);
     }, []);
 
     useEffect(() => {

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 export const revalidate = 0;
 
 export default async function DashboardPage() {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // 1. Fetch Total Pendaftar
     const { count: totalPendaftar } = await supabase

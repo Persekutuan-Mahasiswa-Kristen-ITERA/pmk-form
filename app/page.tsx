@@ -1,14 +1,13 @@
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
-import dynamic from "next/dynamic";
-const GoldenParticles = dynamic(() => import("@/components/GoldenParticles").then((mod) => mod.GoldenParticles), { ssr: false });
+import { GoldenParticles } from "@/components/GoldenParticles";
 import { BibleVerseBanner } from "@/components/BibleVerseBanner";
 import { RecruitmentCard } from "@/components/RecruitmentCard";
 
 export const revalidate = 60; // Revalidate every minute
 
 export default async function LandingPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Fetch only open recruitments
   const { data: recruitments } = await supabase

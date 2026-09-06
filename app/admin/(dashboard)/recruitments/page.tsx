@@ -9,7 +9,7 @@ import { RecruitmentToggle } from "./RecruitmentToggle";
 export const revalidate = 0;
 
 export default async function ManageRecruitments() {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     const { data: recruitments } = await supabase
         .from("recruitments")

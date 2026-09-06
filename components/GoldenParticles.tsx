@@ -7,6 +7,7 @@ interface Particle {
     id: number;
     x: number;
     y: number;
+    drift: number;
     size: number;
     duration: number;
     delay: number;
@@ -25,6 +26,7 @@ export function GoldenParticles() {
                 id: i,
                 x: Math.random() * 100, // vw
                 y: Math.random() * 100, // vh
+                drift: Math.random() * 10 - 5,
                 size: Math.random() * 10 + 4, // px
                 duration: Math.random() * 20 + 15, // sec
                 delay: Math.random() * 10,
@@ -55,7 +57,7 @@ export function GoldenParticles() {
                     }}
                     animate={{
                         y: "-10vh",
-                        x: `${p.x + (Math.random() * 10 - 5)}vw`,
+                        x: `${p.x + p.drift}vw`,
                         opacity: [0, 0.4, 0.4, 0],
                     }}
                     transition={{

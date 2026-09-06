@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 export const revalidate = 0;
 
 export default async function ApplicantsPage({ params, searchParams }: { params: { id: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const id = params.id;
 
     const page = typeof searchParams.page === 'string' ? parseInt(searchParams.page, 10) : 1;

@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 export const revalidate = 0;
 
 export default async function EditRecruitmentPage({ params }: { params: { id: string } }) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const id = params.id;
 
     const { data: recruitment } = await supabase

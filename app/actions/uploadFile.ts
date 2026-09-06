@@ -23,7 +23,7 @@ export async function uploadFile(formData: FormData) {
             throw new Error("File too large. Maximum size is 5 MB.");
         }
 
-        const supabase = createClient();
+        const supabase = await createClient();
         const fileName = `${recruitmentId}/${applicantNim}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
         // 2. Upload to Supabase
