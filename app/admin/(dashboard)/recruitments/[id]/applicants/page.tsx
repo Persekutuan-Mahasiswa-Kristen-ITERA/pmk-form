@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 
 export const revalidate = 0;
 
-export default async function ApplicantsPage({ params, searchParams }: { params: { id: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
+export default async function ApplicantsPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
     const supabase = await createClient();
-    const id = params.id;
+    const { id } = await params;
+    const sp = await searchParams;
 
-    const page = typeof searchParams.page === 'string' ? parseInt(searchParams.page, 10) : 1;
+    const page = typeof sp.page === 'string' ? parseInt(sp.page, 10) : 1;
     const limit = 10;
     const from = (page - 1) * limit;
     const to = from + limit - 1;

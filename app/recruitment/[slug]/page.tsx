@@ -8,11 +8,10 @@ import { Button } from "@/components/ui/button";
 
 export const revalidate = 60;
 
-export default async function RecruitmentPage({ params }: { params: { slug: string } }) {
+export default async function RecruitmentPage({ params }: { params: Promise<{ slug: string }> }) {
     const supabase = await createClient();
 
-    // Await the params properly as per warnings/errors in newer next configs
-    const slug = params.slug;
+    const { slug } = await params;
 
     const { data: recruitment } = await supabase
         .from("recruitments")
