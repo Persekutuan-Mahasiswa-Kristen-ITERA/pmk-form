@@ -246,11 +246,11 @@ begin
           (
             select jsonb_agg(
               case
-                when jsonb_typeof(elem) = 'object' and elem ? 'id' then elem
-                else jsonb_set(elem, '{id}', to_jsonb('field_' || (row_number() over ())::text))
+                when jsonb_typeof(e.elem) = 'object' and e.elem ? 'id' then e.elem
+                else jsonb_set(e.elem, '{id}', to_jsonb('field_' || e.idx::text))
               end
             )
-            from jsonb_array_elements(form_fields) as elem
+            from jsonb_array_elements(form_fields) with ordinality as e(elem, idx)
           )
         else '[]'::jsonb
       end as form_fields,
