@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Platform Form Generik PMK ITERA
 
-## Getting Started
+Sistem Manajemen Form Serbaguna untuk seluruh divisi & kepanitiaan **PMK ITERA** (pendaftaran acara, survei, presensi, dan open recruitment).
 
-First, run the development server:
+## 🚀 Fitur Utama
+- **Multi-Jenis Form**: Mendukung `recruitment`, `event`, `survey`, `presensi`, dan `general`.
+- **Form Builder Dinamis**: Drag-and-drop urutan pertanyaan dengan pilihan tipe field lengkap (Teks Pendek, Teks Panjang, Dropdown, Radio, Checkbox Group, Tanggal, dan Upload Lampiran).
+- **Public Renderer Generik**: Halaman pengisian form responsif di `/form/[slug]` dengan validasi Zod dinamis & upload file ke bucket Supabase.
+- **Manajemen Respons & Export**: Tabel viewer per-form, export data ke **CSV** (PapaParse), dan export seluruh lampiran ke **ZIP** (JSZip).
+- **Kompatibilitas Penuh**: Oprec yang sedang berjalan (`/recruitment/[slug]`) tetap berfungsi normal tanpa ada data yang hilang/terdampak.
+
+---
+
+## 🛠️ Stack Teknologi
+- **Frontend**: Next.js 16 (App Router + Turbopack), React 18, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend & Database**: Supabase (PostgreSQL + Auth + Storage)
+- **Library Pendukung**: `@dnd-kit` (drag-and-drop), `react-hook-form` + `zod` (validasi), `papaparse` (CSV), `jszip` + `file-saver` (ZIP), `lucide-react` (ikon)
+
+---
+
+## 🏁 Cara Menjalankan Lokal
 
 ```bash
+# 1. Clone & install
+git clone https://github.com/Persekutuan-Mahasiswa-Kristen-ITERA/pmk-form.git
+cd pmk-form
+npm install
+
+# 2. Setup Environment Variables (.env.local)
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# 3. Jalankan Server Dev
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka `http://localhost:3000` di browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📂 Struktur Aplikasi
 
-## Learn More
+- `/form/[slug]` — Halaman pengisian form publik generik
+- `/form/[slug]/success` — Halaman konfirmasi sukses + grup WA
+- `/admin/forms` — Dashboard manajemen seluruh form
+- `/admin/forms/new` — Builder untuk membuat form baru
+- `/admin/forms/[id]` — Builder untuk mengedit form
+- `/admin/forms/[id]/responses` — Viewer respons & export CSV/ZIP
+- `/admin/recruitments` — Access lawas oprec (backward-compatible)
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📄 Migrasi Database
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+File SQL migrasi berada di folder `migrations/`:
+- `migrations/001_generic_forms_migration.sql`: Jalankan di **Supabase SQL Editor** untuk membuat tabel `forms`, `form_responses`, `user_roles`, RLS policies, dan menyalin data lama secara otomatis.
+- `migrations/001_generic_forms_rollback.sql`: Script rollback cadangan jika diperlukan.
 
-## Deploy on Vercel
+Detail setup Supabase lengkap dapat dilihat di [SUPABASE_SETUP.md](./SUPABASE_SETUP.md).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+*Dikembangkan untuk Persekutuan Mahasiswa Kristen (PMK) ITERA.*
