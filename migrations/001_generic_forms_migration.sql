@@ -255,7 +255,7 @@ begin
         else '[]'::jsonb
       end as form_fields,
       jsonb_build_object(
-        'allowed_angkatan', coalesce(allowed_angkatan, '[]'::jsonb),
+        'allowed_angkatan', coalesce(to_jsonb(allowed_angkatan), '[]'::jsonb),
         'wa_group_link', coalesce(wa_group_link, ''),
         'collect_identity', true,
         'max_responses', null
