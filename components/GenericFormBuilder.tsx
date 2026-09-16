@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { createForm, updateForm } from "@/lib/forms";
+import { createFormAction, updateFormAction } from "@/app/actions/forms";
 import { revalidateForm } from "@/app/actions/revalidate";
 import type { Form, FieldConfig, FieldType, FormType, FormSettings } from "@/types/forms";
 
@@ -355,10 +355,12 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
       };
 
       if (initialData) {
-        await updateForm(initialData.id, payload);
+        const res = await updateFormAction(initialData.id, payload);
+        if (!res.success) throw new Error(res.error);
         toast({ title: "Berhasil", description: "Form berhasil diperbarui." });
       } else {
-        await createForm(payload);
+        const res = await createFormAction(payload);
+        if (!res.success) throw new Error(res.error);
         toast({ title: "Berhasil", description: "Form baru berhasil dibuat." });
       }
 

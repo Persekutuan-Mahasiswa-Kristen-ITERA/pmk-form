@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import JSZip from "jszip";
 import saveAs from "file-saver";
-import { deleteFormResponse } from "@/lib/forms";
+import { deleteFormResponseAction } from "@/app/actions/deleteResponse";
 import type { Form, FormResponse } from "@/types/forms";
 
 export function GenericResponseTable({
@@ -46,7 +46,7 @@ export function GenericResponseTable({
   const handleDelete = async (id: string) => {
     if (!confirm("Apakah Anda yakin ingin menghapus respons ini?")) return;
     try {
-      await deleteFormResponse(id);
+      await deleteFormResponseAction(id, form.id);
       setResponses((prev) => prev.filter((r) => r.id !== id));
       toast({ title: "Berhasil", description: "Respons berhasil dihapus." });
     } catch (err: unknown) {
