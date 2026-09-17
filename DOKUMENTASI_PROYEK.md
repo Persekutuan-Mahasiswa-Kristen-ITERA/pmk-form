@@ -22,6 +22,7 @@ Dokumen ini berisi dokumentasi teknis, arsitektur, skema database, rute aplikasi
 | **Storage Bucket** | `recruitment-files` (PDF saja) | `form-attachments` (PDF, JPG, PNG, DOC, DOCX maks 10MB) | **[BARU]** |
 | **Form Builder Admin** | `RecruitmentBuilder.tsx` | `GenericFormBuilder.tsx` (7 tipe field, drag-drop, tab settings) | **[BARU]** |
 | **Dashboard Admin** | `/admin/recruitments` | `/admin/forms` (filter jenis form, statistik, & respons viewer) | **[BARU]** |
+| **Landing Page Publik** | Hero tetap dan kartu khusus `RecruitmentCard` dari tabel `recruitments` | Hero diperbarui, filter kategori, quick action Cek Hasil & Masuk Admin, serta kartu generik lintas jenis form dari tabel `forms` | **[TERUBAH]** |
 | **Renderer Publik** | `/recruitment/[slug]` | `/form/[slug]` (renderer generik dinamis dengan Zod validation) | **[BARU]** |
 | **Export Data** | Hanya CSV & ZIP Oprec | Export CSV dinamis & Export ZIP Lampiran per-form | **[TERUBAH]** |
 | **Model Akses/Role** | Single role admin (`authenticated`) | Merekam peran berjenjang di `public.user_roles` (`super_admin`, `divisi_admin`) | **[BARU]** |
