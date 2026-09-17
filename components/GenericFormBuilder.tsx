@@ -260,9 +260,42 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
         <Card>
           <CardHeader><CardTitle className="text-lg">Pengaturan Tambahan</CardTitle><CardDescription>Grup WhatsApp, kustomisasi pesan, dan pengumpulan identitas</CardDescription></CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-1"><Label>Link Group WhatsApp (Opsional)</Label><Input value={settings.wa_group_link || ""} onChange={(e) => setSettings({ ...settings, wa_group_link: e.target.value })} placeholder="https://chat.whatsapp.com/..." /><p className="text-xs text-muted-foreground">Tautan grup WA yang ditampilkan kepada pengisi setelah berhasil mengisi form.</p></div>
-            <div className="space-y-1"><Label>Pesan Terima Kasih setelah Submit</Label><Textarea value={settings.thank_you_message || ""} onChange={(e) => setSettings({ ...settings, thank_you_message: e.target.value })} placeholder="Terima kasih telah berpartisipasi..." rows={2} /></div>
-            <div className="flex items-center space-x-2 pt-2"><Switch id="collect-id" checked={settings.collect_identity ?? true} onCheckedChange={(val) => setSettings({ ...settings, collect_identity: val })} /><Label htmlFor="collect-id" className="cursor-pointer">Kumpulkan Identitas Otomatis (Nama/NIM/Email/Prodi)</Label></div>
+            <div className="space-y-1">
+              <Label>Link Group WhatsApp (Opsional)</Label>
+              <Input value={settings.wa_group_link || ""} onChange={(e) => setSettings({ ...settings, wa_group_link: e.target.value })} placeholder="https://chat.whatsapp.com/..." />
+              <p className="text-xs text-muted-foreground">Tautan grup WA yang ditampilkan kepada pengisi setelah berhasil mengisi form.</p>
+            </div>
+            <div className="space-y-1">
+              <Label>Pesan Terima Kasih setelah Submit</Label>
+              <Textarea value={settings.thank_you_message || ""} onChange={(e) => setSettings({ ...settings, thank_you_message: e.target.value })} placeholder="Terima kasih telah berpartisipasi..." rows={2} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Persyaratan Angkatan (opsional)</Label>
+              <div className="flex flex-wrap gap-2">
+                {[2020, 2021, 2022, 2023, 2024, 2025, 2026].map((angkatan) => {
+                  const isSelected = (settings.allowed_angkatan || []).includes(angkatan);
+                  return (
+                    <button
+                      key={angkatan}
+                      type="button"
+                      onClick={() => {
+                        const current = settings.allowed_angkatan || [];
+                        const next = isSelected ? current.filter((a: number) => a !== angkatan) : [...current, angkatan];
+                        setSettings({ ...settings, allowed_angkatan: next });
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${isSelected ? "bg-primary text-primary-foreground border-primary" : "bg-white text-foreground border-border hover:bg-secondary"}`}
+                    >
+                      Angkatan {angkatan}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Pilih angkatan yang boleh mengisi form ini (opsional).</p>
+            </div>
+            <div className="flex items-center space-x-2 pt-2">
+              <Switch id="collect-id" checked={settings.collect_identity ?? true} onCheckedChange={(val) => setSettings({ ...settings, collect_identity: val })} />
+              <Label htmlFor="collect-id" className="cursor-pointer">Kumpulkan Identitas Otomatis (Nama/NIM/Email/Prodi)</Label>
+            </div>
           </CardContent>
         </Card>
       )}
