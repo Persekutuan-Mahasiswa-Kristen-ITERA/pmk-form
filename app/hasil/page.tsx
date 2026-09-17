@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { GoldenParticles } from "@/components/GoldenParticles";
@@ -9,7 +9,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, ArrowLeft, CheckCircle2, XCircle, AlertCircle, Sparkles, MessageCircle, ExternalLink } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, ArrowLeft, CheckCircle2, XCircle, AlertCircle, Sparkles, MessageCircle, ExternalLink, Filter } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+
+type FormOption = {
+  id: string;
+  title: string;
+};
 
 type ResultState = {
   status: "ACCEPTED" | "NOT_ACCEPTED" | "NOT_REGISTERED";
@@ -24,11 +31,29 @@ type ResultState = {
 } | null;
 
 export default function HasilSeleksiPage() {
+  const [forms, setForms] = useState<FormOption[]>([]);
+  const [selectedFormId, setSelectedFormId] = useState<string>("all");
   const [nim, setNim] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ResultState>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadForms() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("forms")
+        .select("id, title")
+        .eq("form_type", "recruitment")
+        .order("created_at", { ascending: false });
+
+      if (data && data.length > 0) {
+        setForms(data);
+      }
+    }
+    loadForms();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +74,11 @@ export default function HasilSeleksiPage() {
       const res = await fetch("/api/cek-hasil", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nim: nim.trim(), email: email.trim() }),
+        body: JSON.stringify({
+          nim: nim.trim(),
+          email: email.trim(),
+          formId: selectedFormId === "all" ? undefined : selectedFormId,
+        }),
       });
 
       const data = await res.json();
@@ -100,57 +129,67 @@ export default function HasilSeleksiPage() {
           Pengumuman Hasil Seleksi
         </h1>
         <p className="text-base text-foreground/80 text-center max-w-lg mb-8 font-medium bg-background/50 px-6 py-2 rounded-full backdrop-blur-sm">
-          Staff Internship PMK ITERA 2026
+          Pusat Informasi Kelulusan Rekrutmen PMK ITERA
         </p>
 
         {/* Search Card */}
         <Card className="w-full bg-white shadow-xl rounded-3xl border border-border/50 p-6 md:p-8 mb-8">
           <CardContent className="p-0 space-y-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Dropdown Kategori / Pilihan Oprec */}
+              {forms.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-foreground font-semibold text-base flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-primary" /> Pilih Program Rekrutmen
+                  </Label>
+                  <Select value={selectedFormId} onValueChange={setSelectedFormId}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-muted/20 border-border text-base font-medium">
+                      <SelectValue placeholder="Pilih rekrutmen..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Program Rekrutmen</SelectItem>
+                      {forms.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>
+                          {f.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="nim" className="text-foreground font-semibold text-base">
                   Nomor Induk Mahasiswa (NIM)
                 </Label>
-                <div className="relative">
-                  <Input
-                    id="nim"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={nim}
-                    onChange={(e) => setNim(e.target.value)}
-                    placeholder="Contoh: 126140086"
-                    className="h-16 rounded-2xl bg-muted/20 border-border px-5 text-lg font-medium tracking-wide focus-visible:ring-accent focus-visible:ring-2"
-                    maxLength={12}
-                    autoComplete="off"
-                    autoFocus
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground pt-1">
-                  Masukkan NIM lengkap yang digunakan saat mendaftar open recruitment.
-                </p>
+                <Input
+                  id="nim"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={nim}
+                  onChange={(e) => setNim(e.target.value)}
+                  placeholder="Contoh: 121140001"
+                  className="h-14 rounded-2xl bg-muted/20 border-border px-5 text-base font-medium tracking-wide focus-visible:ring-accent focus-visible:ring-2"
+                  maxLength={12}
+                  autoComplete="off"
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-foreground font-semibold text-base">
                   Email Pendaftaran
                 </Label>
-                <div className="relative">
-                  <Input
-                    id="email"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Contoh: nama.12345678@student.itera.ac.id"
-                    className="h-16 rounded-2xl bg-muted/20 border-border px-5 text-lg font-medium tracking-wide focus-visible:ring-accent focus-visible:ring-2"
-                    autoFocus={false}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground pt-1">
-                  Masukkan email yang digunakan saat mendaftar open recruitment.
-                </p>
+                <Input
+                  id="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Contoh: nama.nim@student.itera.ac.id"
+                  className="h-14 rounded-2xl bg-muted/20 border-border px-5 text-base font-medium tracking-wide focus-visible:ring-accent focus-visible:ring-2"
+                />
               </div>
 
               {error && (
@@ -163,7 +202,7 @@ export default function HasilSeleksiPage() {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full h-16 bg-accent hover:bg-accent/90 active:bg-accent text-accent-foreground font-bold rounded-2xl text-lg shadow-lg transition-all flex items-center justify-center gap-2 touch-manipulation"
+                className="w-full h-14 bg-accent hover:bg-accent/90 active:bg-accent text-accent-foreground font-bold rounded-2xl text-base shadow-lg transition-all flex items-center justify-center gap-2 touch-manipulation"
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
@@ -277,11 +316,6 @@ export default function HasilSeleksiPage() {
                       {result.message}
                     </p>
                   </div>
-                  <div className="pt-4 border-t border-border/40">
-                    <p className="text-xs text-muted-foreground italic">
-                      &quot;Sebab aku ini mengetahui rancangan-rancangan apa yang ada pada-Ku mengenai kamu, demikianlah firman TUHAN...&quot; — Yeremia 29:11
-                    </p>
-                  </div>
                 </CardContent>
               </Card>
             )}
@@ -290,7 +324,7 @@ export default function HasilSeleksiPage() {
               <Card className="bg-white border border-destructive/30 shadow-xl rounded-3xl overflow-hidden">
                 <div className="bg-destructive text-destructive-foreground px-6 py-4 flex items-center gap-3">
                   <XCircle className="w-6 h-6" />
-                  <h3 className="font-serif text-xl font-bold">NIM Tidak Ditemukan</h3>
+                  <h3 className="font-serif text-xl font-bold">Data Tidak Ditemukan</h3>
                 </div>
                 <CardContent className="p-6 md:p-8 space-y-4 text-center">
                   <p className="text-muted-foreground leading-relaxed">
