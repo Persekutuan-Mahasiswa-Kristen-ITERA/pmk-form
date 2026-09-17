@@ -37,7 +37,7 @@ function toRendererConfig(f: FieldConfig): import("./FormFieldRenderer").FieldCo
   };
 
   const options = f.options
-    ? f.options.map((o) => (typeof o === "string" ? o : o.label))
+    ? f.options.map((o: any) => (typeof o === "string" ? { label: o, value: o.toLowerCase().replace(/[^a-z0-9]/g, "_") } : o))
     : undefined;
 
   return {

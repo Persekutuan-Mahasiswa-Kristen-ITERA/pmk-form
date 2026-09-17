@@ -68,8 +68,8 @@ function SortableFieldItem({ field, updateField, removeField }: { field: FieldCo
                         <div className="space-y-2 bg-highlight/10 p-4 rounded-xl border border-accent/20">
                             <Label className="text-primary font-semibold">Opsi Pilihan <span className="text-muted-foreground font-normal">(Pisahkan dengan koma)</span></Label>
                             <Input
-                                value={field.options?.join(', ') || ''}
-                                onChange={e => updateField(field.id, { options: e.target.value.split(',').map(s => s.trim()) })}
+                                value={field.options?.map((o: any) => typeof o === 'string' ? o : o.label).join(', ') || ''}
+                                onChange={e => updateField(field.id, { options: e.target.value.split(',').map(s => ({ label: s.trim(), value: s.trim().toLowerCase().replace(/[^a-z0-9]/g, "_") })) })}
                                 placeholder="Opsi A, Opsi B, Opsi C"
                                 className="bg-white border-accent/40 focus-visible:ring-accent"
                             />

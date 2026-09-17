@@ -29,7 +29,7 @@ export interface FieldConfig {
   helperText?: string;
   required?: boolean;
   requiredMessage?: string;
-  options?: FieldOption[] | string[]; // For dropdown, radio, checkbox
+  options?: FieldOption[]; // For dropdown, radio, checkbox
   validation?: FieldValidation;
   defaultValue?: string | string[] | number | boolean | null;
   visible?: boolean;       // Conditional visibility
