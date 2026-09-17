@@ -6,6 +6,7 @@
 export type FieldType =
   | 'text'
   | 'long_text'
+  | 'short_text'
   | 'number'
   | 'email'
   | 'phone'
@@ -25,9 +26,10 @@ export interface FieldConfig {
   label: string;
   placeholder?: string;
   helpText?: string;
+  helperText?: string;
   required?: boolean;
   requiredMessage?: string;
-  options?: FieldOption[]; // For dropdown, radio, checkbox
+  options?: FieldOption[] | string[]; // For dropdown, radio, checkbox
   validation?: FieldValidation;
   defaultValue?: string | string[] | number | boolean | null;
   visible?: boolean;       // Conditional visibility

@@ -1,56 +1,133 @@
-import { createClient } from "@/lib/supabase/server";
-import { RecruitmentForm } from "@/components/RecruitmentForm";
-import { GoldenParticles } from "@/components/GoldenParticles";
-import { notFound } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
+"use client";
+
+import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { GoldenParticles } from "@/components/GoldenParticles";
+import { BibleVerseBanner } from "@/components/BibleVerseBanner";
+import { FormFieldRenderer } from "@/components/FormFieldRenderer";
+import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, ArrowLeft } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import type { FieldConfig } from "@/types/forms";
+import { FormFieldRenderer as GenericFormFieldRenderer } from "@/components/FormFieldRenderer";
 
-export const revalidate = 60;
+interface RecruitmentPageProps {
+  params: { slug: string };
+}
 
-export default async function RecruitmentPage({ params }: { params: Promise<{ slug: string }> }) {
-    const supabase = await createClient();
+export default function RecruitmentPage({ params }: RecruitmentPageProps) {
+  const router = useRouter();
+  const { slug } = params;
+  const [recruitmentData, setRecruitmentData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const supabase = createClient();
 
-    const { slug } = await params;
+  useEffect(() => {
+    async function fetchRecruitment() {
+      try {
+        const { data, error } = await supabase
+          .from("recruitments")
+          .select("*")
+          .eq("slug", slug)
+          .single();
 
-    const { data: recruitment } = await supabase
-        .from("recruitments")
-        .select("id, title, description, is_open, close_date, template_type, form_fields, allowed_angkatan, slug")
-        .eq("slug", slug)
-        .single();
-
-    if (!recruitment) {
-        notFound();
+        if (error || !data) {
+          setError("Recruitment not found or no longer available.");
+        } else {
+          setRecruitmentData(data);
+        }
+      } catch (err: any) {
+        setError(err.message || "Failed to load recruitment data.");
+      } finally {
+        setIsLoading(false);
+      }
     }
+    fetchRecruitment();
+  }, [slug, supabase]);
 
-    const isOpen = recruitment.is_open && new Date(recruitment.close_date) > new Date();
-
-    if (!isOpen) {
-        return (
-            <main className="min-h-screen flex items-center justify-center p-4 relative bg-[#FAF6F0]">
-                <GoldenParticles />
-                <Card className="max-w-lg w-full border-t-8 border-t-accent shadow-2xl bg-white rounded-3xl p-10 text-center z-10">
-                    <CardContent className="space-y-6 pt-6">
-                        <h1 className="font-serif text-4xl font-bold text-primary">Pendaftaran Ditutup</h1>
-                        <p className="text-muted-foreground text-lg leading-relaxed">
-                            Mohon maaf, pendaftaran untuk pelayanan <br /><strong className="text-foreground">{recruitment.title}</strong><br /> telah ditutup.
-                        </p>
-                        <div className="pt-6">
-                            <Button asChild className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold rounded-2xl py-6 text-lg">
-                                <Link href="/">Kembali ke Beranda</Link>
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            </main>
-        );
-    }
-
+  if (isLoading) {
     return (
-        <main className="min-h-screen pt-12 relative overflow-hidden bg-[#FAF6F0]">
-            <GoldenParticles />
-            <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/10 to-transparent pointer-events-none z-0" />
-            <RecruitmentForm recruitment={recruitment} />
-        </main>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
     );
+  }
+
+  if (error || !recruitmentData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="max-w-md w-full p-8 text-center">
+          <CardContent>
+            <CardTitle className="text-xl font-bold text-foreground mb-2">Recruitment Tidak Tersedia</CardTitle>
+            <p className="text-muted-foreground">{error || "Data pendaftaran tidak ditemukan."}</p>
+            <Button variant="ghost" asChild className="mt-4">
+              <Link href="/">Kembali ke Beranda</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const recruitment = recruitmentData;
+  const isOpen = recruitment.is_open && new Date(recruitment.close_date) > new Date();
+
+  if (!isOpen) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="max-w-lg w-full p-10 text-center border-t-8 border-t-accent">
+          <CardContent className="space-y-6">
+            <h1 className="font-serif text-3xl font-bold text-foreground">Pendaftaran Ditutup</h1>
+            <p className="text-muted-foreground">Pendaftaran untuk <strong>{recruitment.title}</strong> telah ditutup.</p>
+            <Button variant="ghost" asChild>
+              <Link href="/">Kembali ke Beranda</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col items-center pt-12 pb-16 px-4 bg-[#FAF6F0]">
+      <Card className="max-w-3xl w-full shadow-xl bg-white rounded-3xl overflow-hidden">
+        <CardHeader className="bg-primary/10 pb-6">
+          <CardTitle className="font-serif text-2xl md:text-3xl text-center text-foreground">{recruitment.title}</CardTitle>
+          <CardDescription className="text-center text-muted-foreground mt-2">{recruitment.description || "Deskripsi tidak tersedia."}</CardDescription>
+        </CardHeader>
+        <CardContent className="p-6 md:p-8 space-y-6">
+          {/* Recruitment-specific settings */}
+          {recruitment?.settings?.allowed_angkatan && (
+            <div className="p-4 bg-secondary/20 rounded-xl border border-border/50">
+              <Label className="font-semibold text-foreground mb-2 block">Persyaratan Angkatan</Label>
+              <p className="text-sm text-muted-foreground">
+                Pendaftar harus berasal dari angkatan: {recruitment.settings.allowed_angkatan.join(", ")}
+              </p>
+            </div>
+          )}
+
+          {/* Render Dynamic Form */}
+          <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
+            {recruitment?.form_fields?.map((field: FieldConfig) => (
+              <GenericFormFieldRenderer key={field.id} fieldConfig={field} control={{} as any} />
+            ))}
+            <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground py-4 rounded-xl font-bold" disabled>Kirim</Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

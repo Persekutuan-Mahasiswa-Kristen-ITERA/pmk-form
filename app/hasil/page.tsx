@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 import { GoldenParticles } from "@/components/GoldenParticles";
 import { BibleVerseBanner } from "@/components/BibleVerseBanner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,24 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, ArrowLeft, CheckCircle2, XCircle, AlertCircle, Sparkles, MessageCircle, ExternalLink, Filter } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 type FormOption = {
   id: string;
   title: string;
 };
-
-type ResultState = {
-  status: "ACCEPTED" | "NOT_ACCEPTED" | "NOT_REGISTERED";
-  nama?: string;
-  message: string;
-  placements?: { 
-    departemen: string; 
-    divisi: string; 
-    prodi?: string;
-    wa_group_link?: string | null;
-  }[];
-} | null;
 
 export default function HasilSeleksiPage() {
   const [forms, setForms] = useState<FormOption[]>([]);
@@ -36,35 +24,26 @@ export default function HasilSeleksiPage() {
   const [nim, setNim] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ResultState>(null);
+  const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const supabase = createClient();
 
   useEffect(() => {
     async function loadForms() {
-      const supabase = createClient();
       const { data } = await supabase
         .from("forms")
         .select("id, title")
         .eq("form_type", "recruitment")
         .order("created_at", { ascending: false });
-
-      if (data && data.length > 0) {
-        setForms(data);
-      }
+      if (data && data.length > 0) setForms(data);
     }
     loadForms();
-  }, []);
+  }, [supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nim.trim()) {
-      setError("Masukkan NIM kamu terlebih dahulu.");
-      return;
-    }
-    if (!email.trim()) {
-      setError("Masukkan email kamu terlebih dahulu.");
-      return;
-    }
+    if (!nim.trim()) { setError("Masukkan NIM kamu terlebih dahulu."); return; }
+    if (!email.trim()) { setError("Masukkan email kamu terlebih dahulu."); return; }
 
     setLoading(true);
     setError(null);
@@ -83,9 +62,7 @@ export default function HasilSeleksiPage() {
 
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || "Gagal memeriksa kelulusan.");
-      }
+      if (!res.ok) throw new Error(data.error || "Gagal memeriksa kelulusan.");
 
       setResult(data);
     } catch (err: any) {
@@ -101,7 +78,6 @@ export default function HasilSeleksiPage() {
       <BibleVerseBanner />
 
       <div className="w-full max-w-2xl px-4 flex flex-col items-center pt-12 mt-2 z-10">
-        {/* Back Link */}
         <div className="w-full flex justify-start mb-6">
           <Link
             href="/"
@@ -124,7 +100,6 @@ export default function HasilSeleksiPage() {
           />
         </div>
 
-        {/* Title */}
         <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground text-center mb-2 tracking-tight">
           Pengumuman Hasil Seleksi
         </h1>
@@ -135,7 +110,7 @@ export default function HasilSeleksiPage() {
         {/* Search Card */}
         <Card className="w-full bg-white shadow-xl rounded-3xl border border-border/50 p-6 md:p-8 mb-8">
           <CardContent className="p-0 space-y-6">
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
               {/* Dropdown Kategori / Pilihan Oprec */}
               {forms.length > 0 && (
                 <div className="space-y-2">
@@ -169,8 +144,8 @@ export default function HasilSeleksiPage() {
                   pattern="[0-9]*"
                   value={nim}
                   onChange={(e) => setNim(e.target.value)}
-                  placeholder="Contoh: 121140001"
-                  className="h-14 rounded-2xl bg-muted/20 border-border px-5 text-base font-medium tracking-wide focus-visible:ring-accent focus-visible:ring-2"
+                  placeholder="Contoh: 126140086"
+                  className="h-14 rounded-2xl bg-muted/20 border-border px-5 text-lg font-medium tracking-wide focus-visible:ring-accent focus-visible:ring-2"
                   maxLength={12}
                   autoComplete="off"
                 />
@@ -188,7 +163,7 @@ export default function HasilSeleksiPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Contoh: nama.nim@student.itera.ac.id"
-                  className="h-14 rounded-2xl bg-muted/20 border-border px-5 text-base font-medium tracking-wide focus-visible:ring-accent focus-visible:ring-2"
+                  className="h-14 rounded-2xl bg-muted/20 border-border px-5 text-lg font-medium tracking-wide focus-visible:ring-accent focus-visible:ring-2"
                 />
               </div>
 
@@ -202,7 +177,7 @@ export default function HasilSeleksiPage() {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full h-14 bg-accent hover:bg-accent/90 active:bg-accent text-accent-foreground font-bold rounded-2xl text-base shadow-lg transition-all flex items-center justify-center gap-2 touch-manipulation"
+                className="w-full h-16 bg-accent hover:bg-accent/90 active:bg-accent text-accent-foreground font-bold rounded-2xl text-lg shadow-lg transition-all flex items-center justify-center gap-2 touch-manipulation"
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
@@ -252,7 +227,7 @@ export default function HasilSeleksiPage() {
                         Penempatan Pelayanan:
                       </h5>
                       <div className="space-y-3">
-                        {result.placements.map((p, idx) => (
+                        {result.placements.map((p: any, idx: number) => (
                           <div key={idx} className="p-4 md:p-5 rounded-2xl bg-white border border-border shadow-sm flex flex-col gap-4">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                               <div className="space-y-1">
