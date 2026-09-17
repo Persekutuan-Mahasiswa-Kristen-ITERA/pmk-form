@@ -65,17 +65,11 @@ export default async function LandingPage({
           Satu wadah untuk pendaftaran pelayanan, kegiatan, kepanitiaan, presensi, dan survei PMK ITERA
         </p>
 
-        {/* Action Bar (Cek Hasil & Akses Admin) */}
+        {/* Action Bar (Cek Hasil) */}
         <div className="flex flex-wrap items-center justify-center gap-3 mb-12">
           <Button asChild variant="outline" size="sm" className="rounded-xl border-accent/50 bg-white hover:bg-highlight/30">
             <Link href="/hasil">
               <CheckCircle2 className="w-4 h-4 mr-1.5 text-primary" /> Cek Hasil Seleksi Oprec
-            </Link>
-          </Button>
-
-          <Button asChild variant="ghost" size="sm" className="rounded-xl text-muted-foreground hover:text-foreground">
-            <Link href="/admin/login">
-              <Lock className="w-3.5 h-3.5 mr-1" /> Masuk Admin
             </Link>
           </Button>
         </div>
