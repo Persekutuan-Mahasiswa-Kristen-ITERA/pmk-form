@@ -66,17 +66,6 @@ export default async function FormsAdminPage({
             <CardTitle className="text-2xl text-emerald-600">{activeCount}</CardTitle>
           </CardHeader>
         </Card>
-
-        <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="text-xs font-semibold text-primary">Akses Oprec Lama</CardDescription>
-            <CardTitle className="text-sm">
-              <Link href="/admin/recruitments" className="text-primary underline flex items-center gap-1 mt-1">
-                Buka /admin/recruitments <ExternalLink className="w-3.5 h-3.5" />
-              </Link>
-            </CardTitle>
-          </CardHeader>
-        </Card>
       </div>
 
       <div className="flex items-center gap-2 border-b pb-3 overflow-x-auto">

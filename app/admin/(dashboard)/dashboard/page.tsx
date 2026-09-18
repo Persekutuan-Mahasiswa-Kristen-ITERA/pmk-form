@@ -127,26 +127,6 @@ export default async function DashboardPage() {
             ))}
           </CardContent>
         </Card>
-
-        {/* Akses Oprec Lama (Backward Compatibility) */}
-        <Card className="border-t-4 border-t-primary shadow-sm bg-white rounded-2xl hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Manajemen Oprec Lama</CardTitle>
-            <div className="bg-primary/10 p-2 rounded-lg">
-              <ExternalLink className="w-5 h-5" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-center text-xs text-muted-foreground">
-              Akses manajemen rekrutmen lama yang masih aktif
-            </p>
-            <div className="mt-3">
-              <Link href="/admin/recruitments" className="text-primary underline flex items-center gap-1">
-                Buka Manajemen Oprec Lama <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Recent Activity (Optional: recent form submissions or form creations) */}
