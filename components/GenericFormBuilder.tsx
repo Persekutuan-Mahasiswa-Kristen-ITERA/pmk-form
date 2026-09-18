@@ -269,29 +269,31 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
               <Label>Pesan Terima Kasih setelah Submit</Label>
               <Textarea value={settings.thank_you_message || ""} onChange={(e) => setSettings({ ...settings, thank_you_message: e.target.value })} placeholder="Terima kasih telah berpartisipasi..." rows={2} />
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Persyaratan Angkatan (opsional)</Label>
-              <div className="flex flex-wrap gap-2">
-                {[2020, 2021, 2022, 2023, 2024, 2025, 2026].map((angkatan) => {
-                  const isSelected = (settings.allowed_angkatan || []).includes(angkatan);
-                  return (
-                    <button
-                      key={angkatan}
-                      type="button"
-                      onClick={() => {
-                        const current = settings.allowed_angkatan || [];
-                        const next = isSelected ? current.filter((a: number) => a !== angkatan) : [...current, angkatan];
-                        setSettings({ ...settings, allowed_angkatan: next });
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${isSelected ? "bg-primary text-primary-foreground border-primary" : "bg-white text-foreground border-border hover:bg-secondary"}`}
-                    >
-                      Angkatan {angkatan}
-                    </button>
-                  );
-                })}
+            {formType === "recruitment" && (
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Persyaratan Angkatan (Opsional)</Label>
+                <div className="flex flex-wrap gap-2">
+                  {[2024, 2025, 2026].map((angkatan) => {
+                    const isSelected = (settings.allowed_angkatan || []).includes(angkatan);
+                    return (
+                      <button
+                        key={angkatan}
+                        type="button"
+                        onClick={() => {
+                          const current = settings.allowed_angkatan || [];
+                          const next = isSelected ? current.filter((a: number) => a !== angkatan) : [...current, angkatan];
+                          setSettings({ ...settings, allowed_angkatan: next });
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${isSelected ? "bg-primary text-primary-foreground border-primary" : "bg-white text-foreground border-border hover:bg-secondary"}`}
+                      >
+                        Angkatan {angkatan}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-muted-foreground">Pilih angkatan (2024-2026) yang boleh mengisi form Open Recruitment ini.</p>
               </div>
-              <p className="text-[11px] text-muted-foreground">Pilih angkatan yang boleh mengisi form ini (opsional).</p>
-            </div>
+            )}
             <div className="flex items-center space-x-2 pt-2">
               <Switch id="collect-id" checked={settings.collect_identity ?? true} onCheckedChange={(val) => setSettings({ ...settings, collect_identity: val })} />
               <Label htmlFor="collect-id" className="cursor-pointer">Kumpulkan Identitas Otomatis (Nama/NIM/Email/Prodi)</Label>
