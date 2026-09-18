@@ -38,7 +38,6 @@ function getServiceClient() {
 }
 
 export async function POST(req: Request) {
-  // IP detection sederhana
   const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "anonymous";
 
   if (isRateLimited(ip)) {
@@ -52,67 +51,57 @@ export async function POST(req: Request) {
     const body = await req.json();
     const rawNim = body?.nim;
     const rawEmail = body?.email;
+    const formId = body?.formId; // Kustomisasi form / recruitment tertentu (opsional)
 
     if (!rawNim || typeof rawNim !== "string") {
-      return NextResponse.json(
-        { error: "NIM wajib diisi." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "NIM wajib diisi." }, { status: 400 });
     }
 
     if (!rawEmail || typeof rawEmail !== "string") {
-      return NextResponse.json(
-        { error: "Email wajib diisi." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Email wajib diisi." }, { status: 400 });
     }
 
     const cleanNim = rawNim.trim();
     const cleanEmail = rawEmail.trim().toLowerCase();
 
     if (!/^\d{7,10}$/.test(cleanNim)) {
-      return NextResponse.json(
-        { error: "Format NIM tidak valid. NIM harus berupa angka." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Format NIM tidak valid. NIM harus berupa angka." }, { status: 400 });
     }
 
-    // Validasi email format dasar
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return NextResponse.json(
-        { error: "Format email tidak valid." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Format email tidak valid." }, { status: 400 });
     }
 
     const supabase = getServiceClient();
 
-    // Cek NIM + Email pada submissions
-    const { data: submissions, error: subError } = await supabase
+    // 1. Cek submissions berdasarkan NIM + Email (dan formId jika dipilih)
+    let subQuery = supabase
       .from("submissions")
-      .select("applicant_name, applicant_nim, applicant_email")
+      .select("applicant_name, applicant_nim, applicant_email, recruitment_id")
       .eq("applicant_nim", cleanNim)
-      .eq("applicant_email", cleanEmail)
-      .limit(1);
+      .eq("applicant_email", cleanEmail);
+
+    if (formId) {
+      subQuery = subQuery.eq("recruitment_id", formId);
+    }
+
+    const { data: submissions, error: subError } = await subQuery.limit(1);
 
     if (subError) {
       console.error("Error querying submissions:", subError);
-      return NextResponse.json(
-        { error: "Terjadi kesalahan sistem. Silakan coba lagi nanti." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Terjadi kesalahan sistem. Silakan coba lagi nanti." }, { status: 500 });
     }
 
     if (!submissions || submissions.length === 0) {
       return NextResponse.json({
         status: "NOT_REGISTERED",
-        message: "Kombinasi NIM dan email tidak ditemukan. Pastikan NIM dan email yang dimasukkan sudah benar dan sesuai saat pendaftaran.",
+        message: "Kombinasi NIM dan email tidak ditemukan pada rekrutmen ini. Pastikan pilihan recruitment dan data yang dimasukkan sudah benar.",
       });
     }
 
     const applicantName = submissions[0].applicant_name;
 
-    // Cek hasil seleksi
+    // 2. Cek hasil seleksi
     const { data: results, error: resError } = await supabase
       .from("selection_results")
       .select("nim, nama, prodi, departemen, divisi, wa_group_link")
@@ -120,21 +109,17 @@ export async function POST(req: Request) {
 
     if (resError) {
       console.error("Error querying selection_results:", resError);
-      return NextResponse.json(
-        { error: "Terjadi kesalahan sistem. Silakan coba lagi nanti." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Terjadi kesalahan sistem. Silakan coba lagi nanti." }, { status: 500 });
     }
 
     if (!results || results.length === 0) {
       return NextResponse.json({
         status: "NOT_ACCEPTED",
         nama: applicantName,
-        message: `Halo ${applicantName}, terima kasih telah mendaftar dan mengikuti seluruh rangkaian seleksi Staff Internship PMK ITERA 2026. Mohon maaf, kamu belum lolos pada tahap ini. Tetap semangat dan terima kasih atas pelayananmu!`,
+        message: `Halo ${applicantName}, terima kasih telah mendaftar dan mengikuti seluruh rangkaian seleksi. Mohon maaf, kamu belum lolos pada tahap ini. Tetap semangat dan terima kasih atas pelayananmu!`,
       });
     }
 
-    // Pendaftar lolos
     return NextResponse.json({
       status: "ACCEPTED",
       nama: applicantName,
@@ -144,13 +129,10 @@ export async function POST(req: Request) {
         prodi: r.prodi,
         wa_group_link: r.wa_group_link || null,
       })),
-      message: `Selamat, ${applicantName}! Kamu dinyatakan LOLOS seleksi Staff Internship PMK ITERA 2026! 🎉`,
+      message: `Selamat, ${applicantName}! Kamu dinyatakan LOLOS seleksi! 🎉`,
     });
   } catch (err) {
     console.error("API error:", err);
-    return NextResponse.json(
-      { error: "Terjadi kesalahan internal." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Terjadi kesalahan internal." }, { status: 500 });
   }
 }

@@ -1,83 +1,176 @@
 import Image from "next/image";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { GoldenParticles } from "@/components/GoldenParticles";
 import { BibleVerseBanner } from "@/components/BibleVerseBanner";
-import { RecruitmentCard } from "@/components/RecruitmentCard";
+import { FormCard } from "@/components/FormCard";
+import { ClipboardList, Filter, Sparkles, Calendar, Users, BarChart3, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export const revalidate = 60; // Revalidate every minute
+export const revalidate = 60; // ISR 60 detik
 
-export default async function LandingPage() {
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ category?: string }>;
+}) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const selectedCategory = resolvedParams.category;
+
   const supabase = await createClient();
 
-  // Fetch only open recruitments
-  const { data: recruitments } = await supabase
-    .from("recruitments")
-    .select("id, slug, title, description, close_date, is_open")
+  // Ambil form aktif dari tabel forms
+  let query = supabase
+    .from("forms")
+    .select("id, slug, title, description, close_date, is_open, form_type")
     .eq("is_open", true)
     .order("close_date", { ascending: true });
 
-  // Filter out those past close date just to be safe
+  if (selectedCategory && selectedCategory !== "all") {
+    query = query.eq("form_type", selectedCategory);
+  }
+
+  const { data: rawForms } = await query;
+
+  // Filter form yang belum kedaluwarsa
   const now = new Date();
-  const openRecruitments = recruitments?.filter(r => new Date(r.close_date) > now) || [];
+  const openForms = rawForms?.filter((f) => new Date(f.close_date) > now) || [];
+
+  // Statistik untuk hero
+  const totalForms = rawForms?.length || 0;
+  const totalCategories = new Set(rawForms?.map(f => f.form_type)).size;
+  const upcomingDeadlines = openForms.filter(f => {
+    const daysLeft = (new Date(f.close_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    return daysLeft <= 7 && daysLeft > 0;
+  }).length;
 
   return (
-    <main className="min-h-screen flex flex-col items-center pb-16 relative w-full overflow-x-hidden">
+    <main className="min-h-screen flex flex-col items-center pb-20 relative w-full overflow-x-hidden bg-[#FAF6F0]">
       <GoldenParticles />
       <BibleVerseBanner />
 
-      <div className="w-full max-w-5xl px-4 flex flex-col items-center pt-16 mt-4">
-        <div className="relative w-32 h-32 md:w-40 md:h-40 mb-8 rounded-full border-4 border-accent shadow-xl bg-white flex items-center justify-center p-2 z-10 overflow-hidden">
+      {/* Hero Section */}
+      <div className="w-full max-w-6xl px-4 sm:px-6 lg:px-8 flex flex-col items-center pt-10 sm:pt-16 mt-2">
+        <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 mb-5 sm:mb-6 rounded-full border-3 sm:border-4 border-accent shadow-xl bg-white flex items-center justify-center p-1.5 sm:p-2 z-10 overflow-hidden">
           <Image
             src="https://res.cloudinary.com/dm3zixaz4/image/upload/v1772567328/PMK_LOGO-removebg-preview_oydcdq.avif"
             alt="PMK ITERA Logo"
-            width={150}
-            height={150}
+            width={120}
+            height={120}
             className="object-contain"
             priority
+            sizes="(max-width: 640px) 120px, (max-width: 768px) 140px, 160px"
           />
         </div>
 
-        <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold text-foreground text-center mb-4 tracking-tight">
-          Pusat Pendaftaran Pelayanan
+        <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-accent/15 border border-accent/30 text-primary text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-3 sm:mb-4">
+          <ClipboardList className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Portal Form & Pelayanan
+        </div>
+
+        <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-foreground text-center mb-3 sm:mb-4 tracking-tight leading-tight px-2">
+          Portal Formulir PMK ITERA
         </h1>
-        <p className="text-lg md:text-xl text-foreground/80 text-center max-w-2xl mb-16 font-medium bg-background/50 px-6 py-2 rounded-full backdrop-blur-sm">
-          Persekutuan Mahasiswa Kristen Institut Teknologi Sumatera
+        <p className="text-sm sm:text-base md:text-lg text-foreground/70 text-center max-w-xl sm:max-w-2xl mb-6 sm:mb-8 font-medium bg-background/40 px-4 sm:px-6 py-1.5 sm:py-2 rounded-full backdrop-blur-sm leading-relaxed px-2">
+          Satu wadah untuk pendaftaran pelayanan, kegiatan, kepanitiaan, presensi, dan survei PMK ITERA
         </p>
 
-        {openRecruitments.length > 0 ? (
-          <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {openRecruitments.map((recruitment) => (
-              <RecruitmentCard
-                key={recruitment.id}
-                slug={recruitment.slug}
-                title={recruitment.title}
-                description={recruitment.description}
-                closeDate={recruitment.close_date}
+        {/* Quick Stats Bar */}
+        <div className="w-full max-w-3xl grid grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8 px-2 sm:px-0">
+          <StatCard icon={<Users className="w-5 h-5" />} value={totalForms} label="Total Form" color="primary" />
+          <StatCard icon={<BarChart3 className="w-5 h-5" />} value={totalCategories} label="Kategori" color="accent" />
+          <StatCard icon={<TrendingUp className="w-5 h-5" />} value={upcomingDeadlines} label="Segera Tutup" color="destructive" />
+        </div>
+
+        {/* Filter Bar Kategori Form - Horizontal scroll on mobile */}
+        <div className="w-full flex items-center justify-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 overflow-x-auto pb-2 px-2 -mx-2 scrollbar-hide">
+          <FilterChip label="Semua" href="/" active={!selectedCategory || selectedCategory === "all"} />
+          <FilterChip label="Recruitment" href="/?category=recruitment" active={selectedCategory === "recruitment"} />
+          <FilterChip label="Event" href="/?category=event" active={selectedCategory === "event"} />
+          <FilterChip label="Survei" href="/?category=survey" active={selectedCategory === "survey"} />
+          <FilterChip label="Presensi" href="/?category=presensi" active={selectedCategory === "presensi"} />
+          <FilterChip label="Umum" href="/?category=general" active={selectedCategory === "general"} />
+        </div>
+
+        {/* Grid Form - Responsive: 1 col mobile, 2 tablet, 3 desktop */}
+        {openForms.length > 0 ? (
+          <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 sm:gap-5 lg:gap-6">
+            {openForms.map((form) => (
+              <FormCard
+                key={form.id}
+                slug={form.slug}
+                title={form.title}
+                description={form.description}
+                closeDate={form.close_date}
+                formType={form.form_type}
               />
             ))}
           </div>
         ) : (
-          <div className="mt-8 flex flex-col items-center justify-center text-center max-w-md bg-white p-10 rounded-3xl shadow-lg border border-border/50">
-            <svg
-              className="w-16 h-16 text-accent mb-6 opacity-80"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2v20M5 8h14" />
-            </svg>
-            <h3 className="font-serif text-2xl font-bold text-foreground mb-3">Belum Ada Recruitment</h3>
-            <p className="text-muted-foreground leading-relaxed">
-              Saat ini belum ada pembukaan pelayanan atau kepanitiaan baru.
-              <br className="my-2" />
-              Nantikan terus kesempatan pelayanan berikutnya 🙏
+          <div className="mt-6 sm:mt-8 flex flex-col items-center justify-center text-center max-w-sm sm:max-w-md bg-white p-6 sm:p-10 rounded-2xl sm:rounded-3xl shadow-lg border border-border/50">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 text-accent mb-4 sm:mb-6 opacity-80 mx-auto">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+                <path d="M12 2v20M5 8h14" />
+              </svg>
+            </div>
+            <h3 className="font-serif text-xl sm:text-2xl font-bold text-foreground mb-2 sm:mb-3">Belum Ada Formulir Aktif</h3>
+            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+              Saat ini belum ada formulir yang sedang dibuka untuk kategori ini.
+              <br className="hidden sm:block my-2" />
+              Nantikan informasi dan kegiatan pelayanan berikutnya 🙏
             </p>
           </div>
         )}
       </div>
+
+      {/* Footer Note */}
+      <footer className="w-full max-w-6xl px-4 py-8 text-center">
+        <p className="text-xs text-muted-foreground/60">
+          Persekutuan Mahasiswa Kristen Institut Teknologi Sumatera &copy; {new Date().getFullYear()}
+        </p>
+      </footer>
     </main>
   );
+}
+
+function StatCard({ icon, value, label, color }: { icon: React.ReactNode; value: number; label: string; color: string }) {
+  const colorMap: Record<string, string> = {
+    primary: "bg-primary/10 text-primary border-primary/20",
+    accent: "bg-amber-100 text-amber-700 border-amber-200",
+    destructive: "bg-red-100 text-red-700 border-red-200",
+  };
+
+  return (
+    <div className={`rounded-2xl p-3 sm:p-4 text-center bg-white shadow-sm border ${colorMap[color] || colorMap.primary} transition-all hover:shadow-md`}>
+      <div className="flex items-center justify-center gap-2 mb-1.5">
+        {icon}
+      </div>
+      <div className="text-2xl sm:text-3xl font-serif font-bold text-foreground">{value}</div>
+      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+function FilterChip({ label, href, active }: { label: string; href: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      className={`px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-all shrink-0 border shadow-sm whitespace-nowrap ${
+        active
+          ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
+          : "bg-white text-foreground/70 border-border/50 hover:bg-secondary/50 hover:border-accent/30"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
+// Global CSS untuk scrollbar-hide
+if (typeof window !== "undefined") {
+  const style = document.createElement("style");
+  style.textContent = `
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  `;
+  document.head.appendChild(style);
 }
