@@ -18,7 +18,7 @@ export function FormCard({ slug, title, description, closeDate, formType }: Form
 
     // Tentukan route tujuan berdasarkan jenis form
     const isRecruitment = formType === "recruitment";
-    const href = isRecruitment ? `/recruitment/${slug}` : `/form/${slug}`;
+    const href = isRecruitment ? `/form/${slug}` : `/form/${slug}`;
 
     const badgeColors: Record<string, string> = {
         recruitment: "bg-primary text-primary-foreground",
