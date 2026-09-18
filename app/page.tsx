@@ -4,10 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { GoldenParticles } from "@/components/GoldenParticles";
 import { BibleVerseBanner } from "@/components/BibleVerseBanner";
 import { FormCard } from "@/components/FormCard";
-import { ClipboardList, Filter, Sparkles, Calendar, Users, BarChart3, TrendingUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ClipboardList, Users, BarChart3, TrendingUp } from "lucide-react";
 
-export const revalidate = 60; // ISR 60 detik
+export const revalidate = 300; // Cache diperpanjang menjadi 5 menit untuk performa optimal
 
 export default async function LandingPage({
   searchParams,
@@ -18,31 +17,34 @@ export default async function LandingPage({
   const selectedCategory = resolvedParams.category;
 
   const supabase = await createClient();
+  const now = new Date().toISOString();
 
-  // Ambil form aktif dari tabel forms
+  // Optimasi Database Query: Filter langsung di Supabase alih-alih di JS
   let query = supabase
     .from("forms")
     .select("id, slug, title, description, close_date, is_open, form_type")
     .eq("is_open", true)
+    .gt("close_date", now)
     .order("close_date", { ascending: true });
 
   if (selectedCategory && selectedCategory !== "all") {
     query = query.eq("form_type", selectedCategory);
   }
 
-  const { data: rawForms } = await query;
+  const { data: openForms } = await query;
 
-  // Filter form yang belum kedaluwarsa
-  const now = new Date();
-  const openForms = rawForms?.filter((f) => new Date(f.close_date) > now) || [];
+  // Ambil total form aktif untuk statistik (query ringan)
+  const { count: totalForms } = await supabase
+    .from("forms")
+    .select("*", { count: "exact", head: true })
+    .eq("is_open", true)
+    .gt("close_date", now);
 
-  // Statistik untuk hero
-  const totalForms = rawForms?.length || 0;
-  const totalCategories = new Set(rawForms?.map(f => f.form_type)).size;
-  const upcomingDeadlines = openForms.filter(f => {
-    const daysLeft = (new Date(f.close_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    return daysLeft <= 7 && daysLeft > 0;
-  }).length;
+  const totalCategories = openForms ? new Set(openForms.map(f => f.form_type)).size : 0;
+  
+  // Hitung yang segera tutup (< 7 hari)
+  const sevenDaysLater = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const upcomingDeadlines = openForms?.filter(f => f.close_date <= sevenDaysLater).length || 0;
 
   return (
     <main className="min-h-screen flex flex-col items-center pb-20 relative w-full overflow-x-hidden bg-[#FAF6F0]">
@@ -76,12 +78,12 @@ export default async function LandingPage({
 
         {/* Quick Stats Bar */}
         <div className="w-full max-w-3xl grid grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8 px-2 sm:px-0">
-          <StatCard icon={<Users className="w-5 h-5" />} value={totalForms} label="Total Form" color="primary" />
+          <StatCard icon={<Users className="w-5 h-5" />} value={totalForms || 0} label="Total Form" color="primary" />
           <StatCard icon={<BarChart3 className="w-5 h-5" />} value={totalCategories} label="Kategori" color="accent" />
           <StatCard icon={<TrendingUp className="w-5 h-5" />} value={upcomingDeadlines} label="Segera Tutup" color="destructive" />
         </div>
 
-        {/* Filter Bar Kategori Form - Horizontal scroll on mobile */}
+        {/* Filter Bar Kategori Form */}
         <div className="w-full flex items-center justify-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 overflow-x-auto pb-2 px-2 -mx-2 scrollbar-hide">
           <FilterChip label="Semua" href="/" active={!selectedCategory || selectedCategory === "all"} />
           <FilterChip label="Recruitment" href="/?category=recruitment" active={selectedCategory === "recruitment"} />
@@ -91,8 +93,8 @@ export default async function LandingPage({
           <FilterChip label="Umum" href="/?category=general" active={selectedCategory === "general"} />
         </div>
 
-        {/* Grid Form - Responsive: 1 col mobile, 2 tablet, 3 desktop */}
-        {openForms.length > 0 ? (
+        {/* Grid Form */}
+        {openForms && openForms.length > 0 ? (
           <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 sm:gap-5 lg:gap-6">
             {openForms.map((form) => (
               <FormCard
@@ -163,14 +165,4 @@ function FilterChip({ label, href, active }: { label: string; href: string; acti
       {label}
     </Link>
   );
-}
-
-// Global CSS untuk scrollbar-hide
-if (typeof window !== "undefined") {
-  const style = document.createElement("style");
-  style.textContent = `
-    .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-  `;
-  document.head.appendChild(style);
 }
