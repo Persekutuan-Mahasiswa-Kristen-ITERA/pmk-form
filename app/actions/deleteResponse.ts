@@ -1,11 +1,13 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth";
 import { revalidateFormAdminData } from "@/app/actions/revalidate";
 
 /** Server action untuk menghapus sebuah respons form (dipakai admin). */
 export async function deleteFormResponseAction(responseId: string, formId: string) {
   try {
+    await requireAdmin();
     const supabase = await createClient();
     const { error } = await supabase.from("form_responses").delete().eq("id", responseId);
 

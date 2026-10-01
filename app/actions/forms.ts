@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth";
 import { revalidateForm } from "@/app/actions/revalidate";
 import type { Form } from "@/types/forms";
 
@@ -8,6 +9,7 @@ type FormPayload = Omit<Form, "id" | "created_at" | "updated_at">;
 
 export async function createFormAction(payload: FormPayload) {
   try {
+    await requireAdmin();
     const supabase = await createClient();
     const { data, error } = await supabase.from("forms").insert(payload).select("id, slug").single();
     if (error) throw new Error(error.message);
@@ -20,6 +22,7 @@ export async function createFormAction(payload: FormPayload) {
 
 export async function updateFormAction(id: string, payload: Partial<FormPayload>) {
   try {
+    await requireAdmin();
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("forms")
