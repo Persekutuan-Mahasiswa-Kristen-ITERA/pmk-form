@@ -46,28 +46,84 @@
 --     on public.form_responses (form_id, nim_normalized)
 --     where nim_normalized is not null;
 --
+-- !!! CREATE INDEX CONCURRENTLY TIDAK BISA DIJALANKAN DI DALAM TRANSAKSI.
+-- Supabase SQL Editor menjalankan setiap statement dalam transaction block
+-- tersarang, sehingga CONCURRENTLY akan error "CREATE INDEX CONCURRENTLY
+-- cannot run inside a transaction block". SOLUSI: jalankan LANGKAH 1 dan
+-- LANGKAH 3 (kode) terpisah, dan jalankan CREATE INDEX CONCURRENTLY melalui
+-- `supabase db` CLI atau koneksi psql dengan autocommit. Alternatif yang
+-- lebih sederhana: hapus kata CONCURRENTLY (tabel hanya 240 baris, lock
+-- singkat tidak bermasalah). Pilih salah satu:
+--
+--   -- Opsi A (lebih aman untuk tabel kecil, tanpa masalah transaksi):
+--   create unique index idx_form_responses_nim_normalized
+--     on public.form_responses (form_id, nim_normalized)
+--     where nim_normalized is not null;
+--
 -- Index menutup (form_id, nim_normalized) -> NIM unik PER FORM, konsisten
 -- dengan cek duplikat aplikasi.
 
--- LANGKAH 3: Kode aplikasi (Fase 2/3) — di app/actions/submitResponse.ts,
--- bagian "4. Duplicate identity check":
+-- LANGKAH 3: Kode aplikasi (Fase 2/3) — di app/actions/submitResponse.ts.
 --
---   const nimValue = nimField ? validated.data[nimField.id] : undefined;
---   if (nimField && typeof nimValue === "string" && nimValue.trim() !== "") {
---     const normalized = nimValue.trim().toUpperCase();
---     // ... cek duplikat seperti sekarang ...
+-- !!! JANGAN HARDCODE nama field identitas. Field NIM saat ini punya id
+-- 'field_applicant_nim', tetapi id itu adalah KONVENSI lama (field dibuat di
+-- builder lama). Form baru yang dibuat lewat GenericFormBuilder menghasilkan
+-- id acak (field_<timestamp>), jadi tidak ada jaminan field NIM selalu punya
+-- id tersebut. Solusi yang benar: tentukan field identitas dari KONFIGURASI
+-- form, bukan nama field yang di-hardcode. Opsi:
+--   a) Tambahkan penanda di FieldConfig, mis. `isIdentity: true` atau
+--      `identityKey: 'nim'`, lalu cari field itu:
+--
+--         const idField = fields.find((f) => f.isIdentity);
+--         const raw = idField ? validated.data[idField.id] : undefined;
+--         const normalized =
+--           typeof raw === "string" && raw.trim() !== ""
+--             ? raw.trim().toUpperCase()
+--             : null;
+--
+--   b) Atau baca dari FormSettings (mis. settings.identity_field_id) yang
+--      diisi saat form dibuat.
+--
+-- Untuk sementara (kompatibilitas data lama), boleh pakai konvensi lama
+-- 'field_applicant_nim' sebagai FALLBACK saja, bukan satu-satunya sumber.
+--
+-- Penanganan error unique-violation (PostgreSQL error code 23505):
+-- server action harus MENDENGARKAN error insert dan menerjemahkannya menjadi
+-- pesan user-friendly, karena RACE CONDITION (dua submit bersamaan lolos
+-- dari cek aplikasi lalu keduanya insert) akan ditolak DB dengan 23505.
+-- Contoh di submitFormResponseAction bagian insert:
+--
+--   const { data: inserted, error: insertError } = await supabase
+--     .from("form_responses")
+--     .insert({
+--       form_id: formId,
+--       answers: validated.data,
+--       files,
+--       respondent_id: null,
+--       nim_normalized: normalized,   // <- kolom baru
+--     })
+--     .select("id")
+--     .single();
+--
+--   if (insertError) {
+--     // 23505 = unique_violation (kemungkinan besar: NIM sama submit bersamaan)
+--     if (insertError.code === "23505") {
+--       return {
+--         success: false as const,
+--         error: "Anda sudah mengirim respons untuk form ini.",
+--         duplicate: true,
+--       };
+--     }
+--     throw new Error(`Gagal menyimpan respons: ${insertError.message}`);
 --   }
---   // di bagian insert:
---   .insert({
---     form_id: formId,
---     answers: validated.data,
---     files,
---     respondent_id: null,
---     nim_normalized: normalized ?? null,   // <- kolom baru
---   });
 --
--- Normalisasi HARUS sama dengan yang dipakai untuk cek duplikat, jika tidak
--- index tidak akan menangkap "a1b2" vs "A1B2".
+-- Catatan: `supabase-js` v2 mengekspos `error.code` untuk error Postgres.
+-- Tanpa penanganan ini, user akan melihat pesan generik 500.
+--
+-- Normalisasi HARUS sama persis antara cek duplikat aplikasi dan nilai yang
+-- di-insert, jika tidak index tidak akan menangkap "a1b2" vs "A1B2".
+-- Normalisasi disarankan: trim() + upper() + hapus karakter non-alfanumerik
+-- (spasi/titik/hubung yang sering dipakai menulis NIM).
 
 -- LANGKAH 4: Backfill OPSIONAL untuk data lama (HANYA jika diinginkan,
 -- terpisah dari migration ini). Catatan: 5 pasang duplikat yang sudah ada

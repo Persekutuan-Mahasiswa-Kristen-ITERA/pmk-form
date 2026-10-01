@@ -9,9 +9,13 @@
 --   - allowed_mime_types = whitelist yang sama dengan ALLOWED_FILE_TYPES
 --     (PDF, JPG, PNG, DOC, DOCX)
 --
--- Catatan: allowed_mime_types memeriksa MIME berdasarkan extension + deteksi
--- server Storage. Server action juga memeriksa extension secara eksplisit
--- (ALLOWED_EXTENSIONS) untuk defense-in-depth.
+-- Catatan: allowed_mime_types di bucket memeriksa MIME berdasarkan EXTENSION
+-- nama file yang di-upload (Supabase Storage memetakan extension -> MIME).
+-- Ini BUKAN deteksi isi file: file bernama evil.pdf berisi HTML tetap lolos
+-- bila extension-nya pdf. Karena itu server action (uploadFormAttachment)
+-- juga memeriksa extension secara eksplisit - dua-duanya berdasarkan nama
+-- file, jadi keduanya harus konsisten. Lihat juga catatan stored-XSS di
+-- docs/AUTHORIZATION_MATRIX.md bagian "SISA RISIKO upload".
 --
 -- Aman: hanya UPDATE baris bucket. Tidak menghapus bucket/file/policy.
 -- ==========================================

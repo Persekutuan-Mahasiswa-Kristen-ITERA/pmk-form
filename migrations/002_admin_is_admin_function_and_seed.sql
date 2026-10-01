@@ -106,13 +106,35 @@ $$;
 --
 -- ROLLBACK ( jika langkah 4/5 gagal ):
 --  - Kode aplikasi: redeploy versi SEBELUM branch ini (requireAdmin() hilang).
---  - Database: file 002 hanya menambah fungsi & (opsional) baris seed;
---    drop fungsi bila perlu:
---        drop function if exists public.is_admin();
---    serta hapus baris seed yang baru dibuat. Tidak ada policy yang diubah,
---    sehingga RLS kembali ke perilaku semula tanpa langkah tambahan.
+--  - Database: file 002 hanya menambah fungsi & baris seed. Untuk kembali:
+--
+--      -- 1. Hapus baris seed admin (berdasarkan EMAIL, bukan UUID):
+--      delete from public.user_roles
+--      where user_id = (
+--        select id from auth.users where email = 'biroitpmkitera@gmail.com'
+--      );
+--
+--      -- 2. Drop fungsi is_admin().
+--      --    !!! HANYA setelah rollback migration 003 dijalankan, karena
+--      --    semua policy di 003 memanggil public.is_admin(). Lihat urutan
+--      --    di bawah.
+--      drop function if exists public.is_admin();
+--
+--  - URUTAN ROLLBACK PENTING (jangan dibalik):
+--      1. Rollback MIGRASI 003 dulu (pulihkan policy permisif lama),
+--      2.baru drop function public.is_admin(),
+--      3. barulah hapus baris seed (boleh sebelum atau sesudah drop fungsi).
+--
+--    Sebab: policy di migration 003 memanggil public.is_admin(). Jika fungsi
+--    di-drop lebih dulu, setiap query ke forms / form_responses / storage
+--    akan error "function public.is_admin() does not exist" dan dashboard
+--    admin jadi tidak bisa dipakai.
+--
+--  - Tidak ada policy di 002 yang diubah, sehingga RLS kembali ke perilaku
+--    semula tanpa langkah tambahan.
 --  - Jika Anda terkunci dari admin padahal akun Anda seharusnya admin,
---    RECOVERY termudah: jalankan ulang bagian SEED di file ini dengan UUID
---    akun Anda (tidak perlu redeploy aplikasi).
+--    RECOVERY termudah: jalankan ulang blok DO di atas (cukup deploy ulang
+--    file 002 - TIDAK perlu redeploy aplikasi). Cek RAISE NOTICE/EXCEPTION
+--    untuk memastikan email sudah terdaftar.
 --  - Pastikan signup publik tetap NONAKTIF setelah rollback.
 -- ==========================================

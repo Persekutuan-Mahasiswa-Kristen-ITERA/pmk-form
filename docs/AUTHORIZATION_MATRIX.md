@@ -215,23 +215,49 @@ sudah dibatasi rate limit dan memvalidasi `formId` UUID + NIM.
 
 ---
 
-## RLS Supabase (setelah migration 003 dijalankan)
+## RLS Supabase (setelah migration 003 + 007 dijalankan)
 
 | Tabel | SELECT | INSERT | UPDATE | DELETE |
 |---|---|---|---|---|
-| `forms` | publik (hanya `is_open=true`) + admin (semua) | admin (`is_admin()`) | admin (`is_admin()`) | admin (`is_admin()`) |
-| `form_responses` | admin (`is_admin()`) | anon+auth (sampai mig 004) → admin (mig 004) | — | admin (`is_admin()`) |
+| `forms` | publik (`is_open=true`) + admin (`is_open=true OR is_admin()`) | admin (`is_admin()`) | admin (`is_admin()`) | admin (`is_admin()`) |
+| `form_responses` | admin (`is_admin()`) | **tidak ada policy** (hanya service role) | — | admin (`is_admin()`) |
 | `selection_results` | admin (`is_admin()`) | admin (`is_admin()`) | admin (`is_admin()`) | admin (`is_admin()`) |
-| `user_roles` | (policy existing) | (policy existing) | (policy existing) | (policy existing) |
+| `submissions` (legacy) | admin (`is_admin()`) | admin (`is_admin()`) | admin (`is_admin()`) | admin (`is_admin()`) |
+| `recruitments` (legacy) | admin (`is_admin()`) | admin (`is_admin()`) | admin (`is_admin()`) | admin (`is_admin()`) |
+| `user_roles` | admin (`is_admin()`) + user baca baris sendiri | admin (`is_admin()`) | admin (`is_admin()`) | admin (`is_admin()`) |
 | storage `form-attachments` | publik (baca URL) | anon+auth (upload, whitelist extension) | admin (`is_admin()`) | admin (`is_admin()`) |
 
 **Catatan penting tentang `selection_results`**: `/api/cek-hasil` memakai
 **service role** (bypass RLS), jadi fitur cek hasil publik **tetap berfungsi**
 setelah RLS diperketat.
 
-**Catatan tentang `forms` SELECT admin**: policy `using (true)` untuk
-`authenticated` dipertahankan supaya admin bisa lihat form tertutup di dashboard.
-Pintu gerbang tulis (insert/update/delete) sudah pakai `is_admin()`.
+**Catatan tentang `forms` SELECT admin**: policy lama `using (true)` diganti
+menjadi `using (is_open = true or public.is_admin())`. Dampak: saat form
+**tertutup**, user biasa/anon yang membuka `/form/[slug]` tidak lagi
+menerima data form (`getFormBySlug` kembali null → halaman menampilkan
+"form tidak ditemukan"). Ini peningkatan keamanan: struktur form tertutup
+tidak lagi bocor ke publik. Landing page `/` tidak terpengaruh karena
+`getOpenForms` sudah memfilter `is_open=true`.
+
+**Catatan tentang `form_responses` INSERT**: setelah 003, tidak ada policy
+INSERT sama sekali → client browser biasa tidak bisa insert. Submit publik
+hanya via server action (service role). Ini menggantikan migration 004 yang
+digabung ke 003.
+
+**Catatan tentang `user_roles` (migration 007)**: policy lama "Super admin can
+manage all roles" memakai subquery ke `user_roles` SENDIRI → **infinite
+recursion** (error PostgreSQL "infinite recursion detected in policy") →
+semua operasi tulis super_admin gagal. Diganti dengan policy yang memakai
+`public.is_admin()` (SECURITY DEFINER → evaluasinya lewat RLS, tidak
+rekursif). Policy "User can view own role" tetap (tidak rekursif: hanya
+membandingkan `user_id = auth.uid()`).
+
+**Catatan tentang `submissions` / `recruitments` (migration 007)**: tabel
+legacy yang sudah dimigrasi penuh ke `forms`/`form_responses`. Tidak ada
+kode aplikasi yang membacanya lagi. Policy lamanya tidak terdokumentasi
+(dibuat di schema pra-001), jadi 007 memakai **drop dinamis dari
+`pg_policies`** (bukan nama tebakan) agar tidak ada policy permisif yang
+lolos.
 
 ---
 

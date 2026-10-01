@@ -1,5 +1,5 @@
 /**
- * In-memory rate limiter (sliding window per key).
+ * In-memory rate limiter (fixed window per key).
  *
  * CARA PAKAI: {@link rateLimit} dengan key unik per sumber daya, mis.
  * `rateLimit("submit:" + ip, 10, 60_000)` atau `rateLimit("cekhasil:" + ip, 15, 60_000)`.
@@ -7,13 +7,16 @@
  * !!! KEKURANGAN IN-MEMORY LIMITER (baca sebelum andalkan ini) !!!
  * State disimpan di memori proses Node saja. Pada platform serverless
  * (**Vercel Functions**), setiap instance / cold start punya map sendiri,
- * sehingga batas bisa dilanggar lintas instance dan map bocor memori pada
- * traffic tinggi. Vercel juga menduplikasi instance saat scale-out, jadi
- * penyerang yang request menyebar ke banyak instance mendapat kuota penuh
- * PER instance. Ini adalah lapisan pertahanan PERTAMA (menghambat brute-force &
- * spam naif), BUKAN pengganti rate limiting terdistribusi (Upstash, Redis, atau
- * Supabase Edge Function with KV) untuk beban produksi yang sungguh-sungguh.
- * Pertimbangkan migrasi ke store eksternal di fase berikutnya.
+ * sehingga batas bisa dilanggar lintas instance. Vercel juga menduplikasi
+ * instance saat scale-out, jadi penyerang yang request menyebar ke banyak
+ * instance mendapat kuota penuh PER instance. Ini lapisan pertahanan PERTAMA
+ * (menghambat brute-force & spam naif), BUKAN pengganti rate limiting
+ * terdistribusi (Upstash, Redis, atau KV) untuk beban produksi yang
+ * sesungguhnya. Pertimbangkan migrasi ke store eksternal di fase berikutnya.
+ *
+ * Selain itu, pembersihan entri kedaluwarsa (lihat MAX_ENTRIES) hanya
+ * berjalan saat map penuh. Pada beban rendah entri kedaluwarsa menetap di
+ * memori sampai limit tercapai - tidak signifikan untuk key berbasis IP.
  */
 
 interface LimitEntry {
@@ -23,7 +26,9 @@ interface LimitEntry {
 
 const limitMap = new Map<string, LimitEntry>();
 
-// Batas map agar tidak tumbuh tak terhingga (key lama di-drop saat penuh).
+// Batas map agar tidak tumbuh tak terhingga. Saat limit tercapai, hanya entri
+// yang KEDALUWARSA yang dibuang (bukan seluruh map), agar user aktif tidak
+// tiba-tiba di-reset kuotanya hanya karena traffic tinggi.
 const MAX_ENTRIES = 10_000;
 
 /**
@@ -31,11 +36,25 @@ const MAX_ENTRIES = 10_000;
  * Tidak throws; pemanggil menentukan respons (mis. HTTP 429).
  */
 export function rateLimit(key: string, limit: number, windowMs: number): boolean {
-  if (limitMap.size > MAX_ENTRIES) {
-    limitMap.clear();
+  const now = Date.now();
+
+  // Buang entri kedaluwarsa. Dijalankan hanya saat map mendekati penuh agar
+  // tidak membebani setiap pemanggilan; lakukan evict selektif (expired only),
+  // jangan clear() seluruhnya.
+  if (limitMap.size >= MAX_ENTRIES) {
+    for (const [k, entry] of limitMap) {
+      if (now > entry.resetAt) limitMap.delete(k);
+    }
+    // Jika setelah evict masih penuh (semua masih aktif), hapus sebagian
+    // entri tertua agar tidak denial-of-service pada memory.
+    if (limitMap.size >= MAX_ENTRIES) {
+      const oldest = [...limitMap.entries()]
+        .sort((a, b) => a[1].resetAt - b[1].resetAt)
+        .slice(0, Math.ceil(MAX_ENTRIES * 0.1));
+      for (const [k] of oldest) limitMap.delete(k);
+    }
   }
 
-  const now = Date.now();
   const entry = limitMap.get(key);
 
   if (!entry || now > entry.resetAt) {
@@ -54,62 +73,83 @@ export function rateLimit(key: string, limit: number, windowMs: number): boolean
 /**
  * Ambil IP client yang paling tepercaya dari request.
  *
- * !!! PENTING: urutan pembacaan header !!!
- * Header `x-forwarded-for` adalah daftar yang dipisah koma dan **BISA dipalsukan
- * client** — client bebas mengirim `x-forwarded-for: 1.2.3.4` palsu, dan proxy
- * hanya MENAMBAHKAN IP sebelumnya di akhir. Akibatnya elemen PERTAMA dari
- * `x-forwarded-for` adalah nilai yang dikirim client sendiri (tidak tepercaya),
- * sedangkan elemen **TERAKHIR** adalah yang ditambahkan oleh proxy tepercaya
- * yang berada tepat di depan server kita (Vercel) — itulah yang kita ambil.
+ * !!! PENTING: header `x-forwarded-for` BISA dipalsukan client !!!
+ * Client bebas mengirim `x-forwarded-for: 1.2.3.4` palsu; proxy hanya
+ * MENAMBAHKAN IP hop sebelumnya di AKHIR daftar. Akibatnya:
+ *   - elemen PERTAMA (kiri)  = nilai yang dikirim client sendiri (TIDAK tepercaya),
+ *   - elemen TERAKHIR (kanan) = ditambah proxy tepercaya di depan server.
  *
- * Urutan prioritas (platform deployment: **Vercel**):
- *  1. `x-vercel-forwarded-for` — diisi infrastruktur Vercel, client TIDAK bisa
- *     menimpanya. Ini sumber paling tepercaya.
- *  2. `x-real-ip` — diisi Vercel, berisi IP client asli (nilai tunggal).
- *  3. `x-forwarded-for` — AMBIL ELEMEN TERAKHIR (kanan), bukan pertama, karena
- *     itulah entri yang ditambah proxy tepercaya. Dipakai hanya jika kedua header
- *     di atas tidak ada (mis. dev lokal / proxy sendiri).
- *  4. "anonymous" — tidak ada header sama sekali (mis. dev).
+ * URUTAN HEADER bergantung pada platform deployment (env TRUSTED_PROXY),
+ * karena asumsi "header X diisi platform" hanya valid di platform itu.
+ * Default: "vercel".
  *
- * KEKURANGAN: tidak ada satupun header di atas yang bisa membedakan IP client
- * asli dari IP NAT gateway yang dipakai banyak orang (mis. jaringan kampus).
- * User di balik NAT yang sama berbagi IP -> berbagi kuota rate limit. Ini
- * diterima sebagai trade-off; batas dipilih longgar (10/menit) untuk
+ *   TRUSTED_PROXY=vercel (default)
+ *     1. x-vercel-forwarded-for  — diisi infrastruktur Vercel, client tidak
+ *                                  bisa menimpanya. Sumber paling tepercaya.
+ *     2. x-real-ip               — diisi Vercel, IP client asli (nilai tunggal).
+ *     3. x-forwarded-for         — ambil elemen TERAKHIR (kanan) sebagai fallback.
+ *
+ *   TRUSTED_PROXY=cloudflare
+ *     1. cf-connecting-ip        — diisi Cloudflare, client tidak bisa menimpa.
+ *     2. x-forwarded-for         — fallback elemen terakhir.
+ *
+ *   TRUSTED_PROXY=nginx   (reverse proxy sendiri; ANDAIHAN nginx di-deploy
+ *                          dipercaya dan menulis x-real-ip / x-forwarded-for)
+ *     1. x-real-ip               — asumsi nginx set header ini (nilai tunggal).
+ *     2. x-forwarded-for         — fallback elemen terakhir.
+ *
+ *   TRUSTED_PROXY=none    (tidak ada proxy tepercaya; mis. dev lokal)
+ *     Hanya x-forwarded-for elemen terakhir. Untuk dev, ini biasanya IP
+ *     loopback. JANGAN pakai di produksi tanpa proxy di depan, karena
+ *     tidak ada header yang terbukti tidak bisa dipalsukan client.
+ *
+ * KEKURANGAN umum (semua mode): tidak ada header yang bisa membedakan IP
+ * client asli dari NAT gateway yang dipakai banyak orang (mis. jaringan
+ * kampus). User di balik NAT yang sama berbagi IP -> berbagi kuota rate
+ * limit. Diterima sebagai trade-off; batas dipilih longgar (10/menit) untuk
  * meminimalkan false-positive pada NAT besar.
  *
  * Menerima objek Headers (bisa dari `req.headers` di route handler atau dari
  * `headers()` next/headers di server action).
  */
 export function getClientIp(req: Headers): string {
+  const trustedProxy = (process.env.TRUSTED_PROXY ?? "vercel").toLowerCase();
+
   function lastHop(headerName: string): string | null {
     const value = req.get(headerName);
     if (!value) return null;
-    // Ambil elemen TERAKHIR (kanan) -> ditambah proxy tepercaya, bukan client.
+    // Elemen TERAKHIR (kanan) = ditambah proxy tepercaya, bukan client.
     const parts = value.split(",");
     const last = parts[parts.length - 1]?.trim();
     return last || null;
   }
 
-  function firstValue(headerName: string): string | null {
+  function singleValue(headerName: string): string | null {
     const value = req.get(headerName);
     if (!value) return null;
-    // x-vercel-forwarded-for / x-real-ip diisi Vercel; ambil elemen pertama.
+    // Header platform biasanya nilai tunggal; ambil elemen pertama.
     const first = value.split(",")[0]?.trim();
     return first || null;
   }
 
-  // 1. Sumber paling tepercaya: diisi Vercel, client tidak bisa spoof.
-  const vercelForwarded = firstValue("x-vercel-forwarded-for");
-  if (vercelForwarded) return vercelForwarded;
+  // Header yang diisi platform (client tidak bisa menimpa), urutan per mode.
+  const platformHeaders: Record<string, string[]> = {
+    vercel: ["x-vercel-forwarded-for", "x-real-ip"],
+    cloudflare: ["cf-connecting-ip"],
+    nginx: ["x-real-ip"],
+    none: [],
+  };
 
-  // 2. x-real-ip: diisi Vercel, nilai tunggal.
-  const realIp = req.get("x-real-ip");
-  if (realIp) return realIp.trim();
+  const headers = platformHeaders[trustedProxy] ?? platformHeaders.vercel;
+  for (const header of headers) {
+    const ip = singleValue(header);
+    if (ip) return ip;
+  }
 
-  // 3. Fallback: elemen TERAKHIR x-forwarded-for (proxy tepercaya).
+  // Fallback universal: elemen TERAKHIR x-forwarded-for.
   const forwardedLast = lastHop("x-forwarded-for");
   if (forwardedLast) return forwardedLast;
 
-  // 4. Tidak ada header sama sekali.
+  // Tidak ada header sama sekali.
   return "anonymous";
 }

@@ -1,35 +1,19 @@
 -- ==========================================
--- MIGRASI 004: Hapus anon INSERT ke form_responses
--- TAHAP 3 dari 3 — JALANKAN HANYA SETELAH migration 003 diterapkan DAN
--- alur submit via server action (submitFormResponseAction) TERVERIFIKASI
--- berfungsi di produksi.
+-- MIGRASI 004: [DIGABUNG KE MIGRASI 003 — JANGAN DIJALANKAN SENDIRI]
 -- ==========================================
--- TUJUAN: menutup jalur tulis langsung ke form_responses dari client anon,
--- sehingga satu-satunya cara submit adalah melalui server action yang sudah
--- memvalidasi (form terbuka, close_date, max_responses, duplikat NIM, skema
--- Zod dari field config). Server action memakai SERVICE ROLE yang bypass RLS,
--- sehingga submit publik tetap berfungsi setelah migration ini.
+-- Revisi Checkpoint 3: isi migration 004 (hapus anon INSERT ke
+-- form_responses) SUDAH DIGABUNGKAN ke migration 003 (bagian 2b).
 --
--- TIDAK DROP tabel/kolom, TIDAK menonaktifkan RLS.
--- ==========================================
-
--- Hapus policy "Anyone can submit form responses" (anon + authenticated INSERT).
-drop policy if exists "Anyone can submit form responses" on public.form_responses;
-
--- Ganti: hanya admin (lewat aplikasi/service role) yang bisa insert langsung.
--- Karena server action memakai service role (bypass RLS), policy ini hanya
--- mencegah insert dari client browser biasa.
-create policy "Admins can insert form responses"
-  on public.form_responses for insert
-  to authenticated
-  with check (public.is_admin());
-
--- ==========================================
--- ROLLBACK
--- ==========================================
--- drop policy if exists "Admins can insert form responses" on public.form_responses;
--- create policy "Anyone can submit form responses"
---   on public.form_responses for insert
---   to anon, authenticated
---   with check (true);
+-- ALASAN penggabungan: alur submit form berjalan melalui server action
+-- (submitFormResponseAction) yang memakai SERVICE ROLE (bypass RLS).
+-- Aplikasi TIDAK bergantung pada policy anon INSERT ke form_responses,
+-- jadi menutupnya tidak perlu ditunda menjadi tahap terpisah — aman
+-- dijalankan bersamaan dengan pengetatan RLS lainnya di 003.
+--
+-- FILE INI DIPERTAHANKAN sebagai penanda agar urutan migration tetap utuh
+-- dan rollback catatan sejarah jelas. JANGAN jalankan file ini sendiri;
+-- jalankan MIGRASI 003 (yang sudah mencakup isi 004).
+--
+-- Rollback 003 berisi pulihkan policy "Anyone can submit form responses"
+-- (bawah blok ROLLBACK di 003) yang setara dengan rollback 004.
 -- ==========================================

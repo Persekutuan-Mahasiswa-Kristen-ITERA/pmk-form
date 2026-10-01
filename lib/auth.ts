@@ -28,6 +28,14 @@ export interface AdminUser {
  * Returns `null` when the request is unauthenticated OR the authenticated user
  * has no `user_roles` row. Callers that must distinguish those two cases can
  * check the raw session first.
+ *
+ * FASE 2 (catatan): pembungkusan dengan React `cache()` direncanakan agar
+ * beberapa panggilan `requireAdmin()` / `getAdminUser()` dalam satu request
+ * (satu render server component + server action) hanya melakukan SATU round-trip
+ * ke Supabase. Saat ini setiap pemanggilan mengulang query user_roles. Tunggu
+ * Fase 2 karena perlu verifikasi `cache()` aman dipakai lintas server action
+ * (request scope, bukan module scope) dan tidak menyebarkan identitas antar
+ * request yang berbeda.
  */
 export async function getAdminUser(): Promise<AdminUser | null> {
   const supabase = await createClient();
