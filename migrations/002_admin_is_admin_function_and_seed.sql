@@ -40,25 +40,52 @@ grant execute on function public.is_admin() to authenticated;
 -- ==========================================
 -- 2. SEED admin pertama
 -- ==========================================
--- GANTI 'GANTI@EMAIL' dengan email admin yang sebenarnya. Subselect mengambil
--- UUID dari auth.users berdasarkan email, jadi Anda tidak perlu mencari UUID
--- manual. Untuk menambah admin lain, duplikat blok INSERT dengan email lain.
+-- Email admin diisi di bawah. Subselect mengambil UUID dari auth.users
+-- berdasarkan email, jadi Anda tidak perlu mencari UUID manual.
+-- Untuk menambah admin lain, duplikat blok DO di bawah dengan email lain.
 --
 -- (Sesuai keputusan Fase 1: ada baris di user_roles = admin. Pembatasan per
 --  divisi ditunda ke Fase 4.)
 
-insert into public.user_roles (user_id, role, division)
-select id, 'super_admin', null
-from auth.users
-where email = 'GANTI@EMAIL'
-on conflict (user_id) do nothing;
+-- !!! PENTING: DO-block di bawah GAGAL (EXCEPTION) jika email tidak ditemukan
+-- di auth.users. Ini disengaja: lebih baik migration gagal keras di sini
+-- daripada Anda deploy kode requireAdmin() dan terkunci dari dashboard admin
+-- karena belum ada baris di user_roles.
+do $$
+declare
+  admin_count int;
+begin
+  insert into public.user_roles (user_id, role, division)
+  select id, 'super_admin', null
+  from auth.users
+  where email = 'biroitpmkitera@gmail.com'
+  on conflict (user_id) do nothing;
 
--- VERIFIKASI seed berhasil (read-only):
+  -- Verifikasi baris admin untuk email ini benar-benar ada. Cek ini juga
+  -- mencakup baris dari percobaan sebelumnya, karena on conflict do nothing
+  -- membuat migration ini idempoten.
+  select count(*) into admin_count
+  from public.user_roles ur
+  join auth.users u on u.id = ur.user_id
+  where u.email = 'biroitpmkitera@gmail.com';
+
+  if admin_count = 0 then
+    raise exception
+      'SEED ADMIN GAGAL: tidak ada user di auth.users dengan email = ''biroitpmkitera@gmail.com''. '
+      'Periksa bahwa email tersebut sudah terdaftar (tabel auth.users) dan ejaannya '
+      'benar, lalu jalankan ulang migration 002. JANGAN deploy kode requireAdmin() '
+      'sebelum seed ini berhasil - Anda akan terkunci dari dashboard admin.';
+  end if;
+
+  raise notice 'SEED ADMIN OK: % baris user_roles untuk biroitpmkitera@gmail.com.', admin_count;
+end
+$$;
+
+-- VERIFIKASI tambahan (read-only, jalankan setelah migration):
 --   select ur.user_id, u.email, ur.role from public.user_roles ur
 --   join auth.users u on u.id = ur.user_id;
---
--- Jika hasilnya 0 baris -> email salah/ketemu; ganti 'GANTI@EMAIL' dan
--- jalankan ulang blok INSERT di atas.
+-- Hasil yang diharapkan: minimal 1 baris dengan email
+--   biroitpmkitera@gmail.com dan role = super_admin.
 
 -- ==========================================
 -- URUTAN ROLLOUT (WAJIB diikuti berurutan)

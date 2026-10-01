@@ -1,84 +1,115 @@
 -- ==========================================
--- MIGRASI 006 (USULAN — JANGAN DIJALANKAN DULU): Unique index parsial duplikat NIM per form
+-- MIGRASI 006 (USULAN UNTUK FASE 2/3 — JANGAN DIJALANKAN SEKARANG)
+--   Unique index duplikat NIM per form via kolom nim_normalized
 -- ==========================================
--- TUJUAN: mencegah dua respons dengan NIM sama pada form yang sama di level
--- database (belaan terakhir untuk cek duplikat di server action, yang bisa
--- kalah oleh race condition). Hanya berlaku untuk form yang mengumpulkan
--- identitas dengan key 'field_applicant_nim' (konvensi sejak recruitment lama).
+-- LIKUIDASI USULAN LAMA: usulan pertama (unique index langsung pada
+-- answers->>'field_applicant_nim') DITINGGALKAN karena data lama mengandung
+-- 5 pasang duplikat NIM di produksi. Sesuai keputusan: DATA LAMA TIDAK DISENTUH,
+-- tidak ada resolve/penghapusan duplikat. Index langsung tidak bisa dibuat
+-- tanpa mengubah data lama, jadi pendekatan ini tidak layak.
 --
--- !! DILAPANGAN DULU: ada duplikat NIM di data produksi (5 pasang, lihat
--- !! dry-run di bawah). Index akan GAGAL dibuat selama duplikat ada. Sebelum
--- !! menjalankan migration ini, resolve duplikat dulu (lihat langkah 2).
+-- PENDEKATAN BARU: kolom normatif `nim_normalized` yang DIISI OLEH SERVER ACTION
+-- (bukan oleh client, bukan oleh trigger), dengan unique PARTIAL index yang
+-- hanya menutupi baris baru:
 --
--- CARA KERJA:
---  - Expression index pada (form_id, answers->>'field_applicant_nim').
---  - Partial (WHERE): hanya baris yang MEMILIKI key field_applicant_nim dan
---    nilainya tidak kosong. Form tanpa field NIM (survey/presensi) tidak
---    terkena, dan respons tanpa identitas tidak memblokir.
---  - answers->> ... menghasilkan text; null jika key tidak ada (sudah di-WHERE).
+--   - Kolom nullable. Baris LAMA -> nim_normalized IS NULL -> tidak masuk index
+--     -> data lama tetap utuh, duplikat lama tetap ada (diterima).
+--   - Barus BARU -> server action mengisi nim_normalized = NIM yang sudah
+--     dinormalisasi (uppercase + trim). Jika dua submit bersamaan mencoba NIM
+--     yang sama, unique index menolak salah satunya -> race condition teratasi
+--     secara deterministik di level database.
+--   - Index bersifat PARTIAL (WHERE nim_normalized IS NOT NULL) sehingga form
+--     TANPA field identitas (survey/presensi) tidak terkena sama sekali.
 --
--- RISIKO & MITIGASI:
---  - Index membebani INSERT form_responses sedikit (cek uniqueness). OK.
---  - Jika aplikasi sengaja mengizinkan respons ganda untuk form tertentu
---    (mis. presensi berkali-kali), index ini akan menolak. Saat ini hanya
---    form dengan field_applicant_nim yang terkena, jadi aman.
---  - Migration 004 belum dijalankan? Tetap bisa pakai index ini (service role
---    bypass RLS, tapi constraint tetap berlaku).
+-- MENGAPA TIDAK PAKAI TRIGGER: normalisasi harus konsisten antara server action
+-- (yang mengecek duplikat) dan database. Memasukkan logika di server action
+-- menjadikannya dapat diuji unit-test dan tetap satu-sumber-kebenaran sama
+-- dengan cek duplikat aplikasi. Trigger hanya untuk pertahanan jika server
+-- action di-bypass - bisa ditambahkan terpisah di fase berikutnya jika perlu.
+--
+-- STATUS: USULAN. Tidak dijalankan di Fase 1. Ditunda ke Fase 2/3 karena
+-- memerlukan perubahan kode (server action mengisi kolom baru) + perubahan
+-- schema, dan Fase 1 berfokus pada otorisasi saja.
 -- ==========================================
 
--- LANGKAH 1: DRY-RUN deteksi duplikat (read-only, jalankan dulu!).
--- Jika hasilnya 0 baris -> aman lanjut ke LANGKAH 3.
--- Jika ada baris -> resolve duplikat di LANGKAH 2 dulu.
+-- LANGKAH 1: Tambah kolom (nullable, tanpa default -> baris lama dapat NULL).
+--
+--   alter table public.form_responses
+--     add column if not exists nim_normalized text;
+--
+-- Catatan: tidak ada NOT NULL constraint, agar baris lama dan form tanpa
+-- field identitas tidak melanggar.
+
+-- LANGKAH 2: Unique PARTIAL index.
+--
+--   create unique index concurrently idx_form_responses_nim_normalized
+--     on public.form_responses (form_id, nim_normalized)
+--     where nim_normalized is not null;
+--
+-- Index menutup (form_id, nim_normalized) -> NIM unik PER FORM, konsisten
+-- dengan cek duplikat aplikasi.
+
+-- LANGKAH 3: Kode aplikasi (Fase 2/3) — di app/actions/submitResponse.ts,
+-- bagian "4. Duplicate identity check":
+--
+--   const nimValue = nimField ? validated.data[nimField.id] : undefined;
+--   if (nimField && typeof nimValue === "string" && nimValue.trim() !== "") {
+--     const normalized = nimValue.trim().toUpperCase();
+--     // ... cek duplikat seperti sekarang ...
+--   }
+--   // di bagian insert:
+--   .insert({
+--     form_id: formId,
+--     answers: validated.data,
+--     files,
+--     respondent_id: null,
+--     nim_normalized: normalized ?? null,   // <- kolom baru
+--   });
+--
+-- Normalisasi HARUS sama dengan yang dipakai untuk cek duplikat, jika tidak
+-- index tidak akan menangkap "a1b2" vs "A1B2".
+
+-- LANGKAH 4: Backfill OPSIONAL untuk data lama (HANYA jika diinginkan,
+-- terpisah dari migration ini). Catatan: 5 pasang duplikat yang sudah ada
+-- akan membuat backfill gagal -> perlu COALESCE/DISTINCT ON (ambil satu baris
+-- per pasang) atau biarkan NULL untuk duplikat. SESUAI KEPUTUSAN: data lama
+-- tidak disentuh -> backfill dilewati, baris lama tetap NULL.
+--
+--   update public.form_responses
+--   set nim_normalized = upper(answers->>'field_applicant_nim')
+--   where nim_normalized is null
+--     and answers ? 'field_applicant_nim'
+--     and coalesce(answers->>'field_applicant_nim', '') <> '';
+
+-- LANGKAH 5: Verifikasi (read-only).
+--
+--   select indexname, indexdef from pg_indexes
+--   where tablename = 'form_responses'
+--     and indexname = 'idx_form_responses_nim_normalized';
+--
+--   -- Duplikat yang lolos (harus 0 setelah aplikasi mengisi kolom):
+--   select form_id, nim_normalized, count(*)
+--   from public.form_responses
+--   where nim_normalized is not null
+--   group by form_id, nim_normalized
+--   having count(*) > 1;
+
+-- ROLLBACK:
+--   drop index if exists public.idx_form_responses_nim_normalized;
+--   alter table public.form_responses drop column if exists nim_normalized;
+
+-- ==========================================
+-- DRY-RUN: cek duplikat di data LAMA (hanya informasi, TIDAK ada aksi).
+-- Hasil saat penulisan: 5 pasang duplikat, semuanya count=2. Sesuai keputusan,
+-- duplikat ini diterima dan TIDAK di-resolve.
 --
 --   select
 --     fr.form_id,
 --     fr.answers->>'field_applicant_nim' as nim,
---     count(*) as dup_count,
---     array_agg(fr.id order by fr.submitted_at) as response_ids
+--     count(*) as dup_count
 --   from public.form_responses fr
 --   where fr.answers ? 'field_applicant_nim'
 --     and coalesce(fr.answers->>'field_applicant_nim', '') <> ''
 --   group by fr.form_id, fr.answers->>'field_applicant_nim'
 --   having count(*) > 1;
-
--- (Hasil dry-run saat penulisan: 5 pasang duplikat, masing-masing count=2,
---  pada form fa3242b8…, 7e3f4758… (x3), a70719a8… — resolve dulu!)
-
--- LANGKAH 2: Resolve duplikat (USULAN — baca hati-hati, sesuaikan kasus).
--- Per pasang, simpan respons terbaru, hapus yang lama. CONTOH untuk satu pasang:
---
---   delete from public.form_responses
---   where id = '<ID_RESPONS_LAMA>'   -- dari response_ids dry-run, ambil yang bukan pertama
---   and form_id = '<FORM_ID>';
---
--- ULANG untuk setiap pasang, lalu jalankan ulang LANGKAH 1 sampai 0 baris.
--- BACKUP sebelum menghapus apapun!
-
--- LANGKAH 3: Buat index (jalankan HANYA setelah LANGKAH 1 = 0 baris).
--- Pakai CONCURRENTLY agar tidak mengunci tabel (butuh lama? tetap cepat, 240 baris).
---
---   create unique index concurrently idx_form_responses_nim_per_form
---     on public.form_responses (form_id, (answers->>'field_applicant_nim'))
---     where answers ? 'field_applicant_nim'
---       and coalesce(answers->>'field_applicant_nim', '') <> '';
-
--- LANGKAH 4: Verifikasi index ada & bekerja (read-only).
---
---   select indexname, indexdef from pg_indexes
---   where tablename = 'form_responses' and indexname = 'idx_form_responses_nim_per_form';
---
---   -- Uji penolakan (harus error unique_violation):
---   -- insert into public.form_responses (form_id, answers)
---   -- values ('<FORM_ID_YANG_PUNYA_NIM>', '{"field_applicant_nim":"12345678"}');
-
--- ROLLBACK:
---   drop index if exists public.idx_form_responses_nim_per_form;
-
--- ==========================================
--- CATATAN max_responses: enforcement di server action (submitFormResponseAction
--- langkah 3) adalah BEST-EFFORT karena membaca count lalu insert secara
--- terpisah (race condition: dua submit bersamaan bisa lolos). Solusi
--- deterministik membutuhkan trigger/constraint tambahan atau lock eksplisit;
--- prioritas rendah karena kuota jarang dipakai (semua form produksi:
--- max_responses = null).
 -- ==========================================

@@ -34,7 +34,9 @@ migration 003. Lapisan **5** adalah service-role key yang hanya ada di server.
 `submitFormResponseAction` — proteksi (urutan eksekusi):
 
 1. **Rate limit** — 10 pengiriman/menit per IP (`rateLimit("submit:"+ip, 10, 60_000)`).
-   IP dari first-hop header (`x-vercel-forwarded-for` → `x-real-ip` → `x-forwarded-for`).
+   IP dari `getClientIp()` yang memprioritaskan header yang diisi platform Vercel
+   (`x-vercel-forwarded-for` → `x-real-ip`), fallback ke entri **paling kanan**
+   `x-forwarded-for` (lihat `lib/rate-limit.ts`).
 2. **Skema input** — `z.object({ formId: z.string().uuid(), answers: z.record(...) })`.
    `formId` **harus UUID** → tidak bisa disuntik path/SQL.
 3. **Form harus ada** — fetch dari DB by id; tidak ada → tolak.
@@ -55,7 +57,72 @@ migration 003. Lapisan **5** adalah service-role key yang hanya ada di server.
 2. **MIME type di-whitelist** (`ALLOWED_FILE_TYPES`).
 3. **Ekstensi nama file di-whitelist** (`ALLOWED_EXTENSIONS`) — defense-in-depth, karena MIME bisa dipalsukan client.
 4. **Ukuran ≤ 10MB** (`MAX_FILE_SIZE`).
-5. **Nama file disanitasi** (`safeFileName`), respondent key disanitasi (`safeRespondentKey`).
+5. **Nama file disanitasi** — `file.name.replace(/[^a-zA-Z0-9.-]/g, "_")`
+   (hanya alfanumerik, titik, strip; spasi/`../`/unicode di-replace `_`).
+6. **Respondent key disanitasi** — `.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80)`,
+   default `"anonymous"` jika kosong. Mencegah segment path injection.
+7. **`upsert: false`** — tidak bisa menimpa file existing.
+
+### Upload — bukti per-klaim (a)–(d)
+
+**(a) Nama file di-sanitize** — `app/actions/uploadFile.ts`:
+```ts
+const safeRespondentKey = String(respondentKey)
+  .replace(/[^a-zA-Z0-9_-]/g, "_")
+  .slice(0, 80) || "anonymous";
+const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+const objectPath = `${formId}/${safeRespondentKey}/${Date.now()}-${safeFileName}`;
+```
+`formId` juga sudah lolos `UUID_RE` (bukan input bebas) jadi path hanya bisa
+`<uuid>/<sanitized>/<ts>-<sanitized>`. Tidak ada `../` yang lolos.
+
+**(b) MIME + ukuran divalidasi di server action** (bukan hanya di client):
+```ts
+if (!ALLOWED_FILE_TYPES.has(file.type)) { throw ... }   // MIME whitelist
+const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+if (!ALLOWED_EXTENSIONS.has(extension)) { throw ... }     // ekstensi whitelist
+if (file.size > MAX_FILE_SIZE) { throw ... }              // 10 MB
+```
+Semua cek di atas ada di dalam `"use server"` — client tidak bisa melewati
+validasi ini karena bukan kode browser.
+
+**(c) Migration 005 mengatur limit di level bucket** (pertahanan kedua di
+infrastruktur Storage, di luar aplikasi):
+```sql
+update storage.buckets set
+  file_size_limit    = 10485760,
+  allowed_mime_types = array['application/pdf', 'image/jpeg', ...]
+where id = 'form-attachments';
+```
+Jadi meski anon key bocor atau seseorang mem-bypass server action dan upload
+langsung ke Storage API, server Storage tetap menolak file > 10MB atau MIME
+yang tidak di-whitelist.
+
+**(d) SISA RISIKO yang masih ada (perlu disadari)**:
+
+- **Storage INSERT anon masih terbuka.** RLS bucket `form-attachments` masih
+  mengizinkan `anon` INSERT (diperlukan agar upload dari form publik bekerja).
+  Artinya siapa pun dengan `anon_key` (ada di bundle browser, memang publik)
+  bisa upload langsung ke bucket tanpa lewat server action kita.
+  **Konsekuensi**: penyerang bisa mengisi bucket dengan file (maks 10MB,
+  MIME whitelist saja) → **pemakaian kuota Storage / abuse biaya**.
+  **Yang sudah membatasi**: migration 005 (ukuran + MIME), bucket tidak mengizinkan
+  overwrite file orang lain (RLS INSERT tanpa policy update untuk anon).
+- **Tidak ada rate limit khusus upload.** `uploadFormAttachment` tidak memanggil
+  `rateLimit()` (hanya submit action yang kena). Spam upload hanya dibatasi oleh
+  10MB/MIME + kuota Vercel function. → **mitigasi: tambahkan rate limit upload
+  di Fase 2**, atau pindahkan upload ke masuk ke `submitFormResponseAction`.
+- **MIME bisa dipalsukan** (`file.type` dibaca dari header Content-Type client).
+  Karena itu ada cek ekstensi terpisah, tapi dua-duanya bisa dikocoki bersamaan
+  (mis. `evil.pdf` berisi script). **Bucket hanya cek MIME + extension, bukan
+  isi file**. Risiko: file `.pdf` berisi HTML/JS bisa di-upload lalu dibuka
+  langsung di domain Storage → **stored XSS jika origin bucket sama dengan
+  aplikasi**. Mitigasi yang disarankan: Supabase bucket mengirim `Content-Type`
+  sesuai upload (bukan `text/html`) + `Content-Disposition: attachment`, jadi
+  browser tidak menjalankannya; **verifikasi header response bucket** di Fase 2.
+- **Nama file sangat panjang** tidak dibatasi eksplisit (hanya `safeFileName`
+  tanpa `.slice()`). Path maks Supabase 1024 char; praktis tidak bisa diabuse,
+  tapi bisa ditambah `slice(0, 200)` di Fase 2.
 
 ---
 
@@ -105,6 +172,46 @@ migration 003. Lapisan **5** adalah service-role key yang hanya ada di server.
 | `getAllUserRoles` | ❓ belum | Manajemen role — **Fase 4** (harus super_admin) |
 | `upsertUserRole` | ❓ belum | Manajemen role — **Fase 4** (harus super_admin) |
 | `removeUserRole` | ❓ belum | Manajemen role — **Fase 4** (harus super_admin) |
+
+### Bukti: `requireAdmin()` hanya di 11 fungsi admin
+
+Dicek dengan parse per-fungsi atas `lib/forms.ts` (bukan grep global):
+
+```text
+fungsi                       requireAdmin?    baris
+----------------------------------------------------------
+getOpenForms                 tidak (publik)   L18
+getFormBySlug                tidak (publik)   L33
+getFormById                  YA (admin)       L49
+getAllForms                  YA (admin)       L66
+countActiveForms             YA (admin)       L94
+createForm                   YA (admin)       L107
+updateForm                   YA (admin)       L123
+toggleFormOpen               YA (admin)       L141
+deleteForm                   YA (admin)       L156
+submitFormResponse           tidak (publik)   L168
+getFormResponses             YA (admin)       L188
+getAllFormResponses          YA (admin)       L211
+countFormResponses           YA (admin)       L227
+checkDuplicateResponse       tidak (publik)   L247
+deleteFormResponse           YA (admin)       L265
+getCurrentUserRole           tidak (publik)   L280
+getCurrentUserPermissions    tidak (publik)   L308
+getAllUserRoles              tidak (publik)   L336
+upsertUserRole               tidak (publik)   L348
+removeUserRole               tidak (publik)   L362
+
+=> fungsi dengan requireAdmin(): 11
+=> fungsi TANPA requireAdmin()  : 9
+CEK KERAS: fungsi publik yang seharusnya bebas tapi terkunci -> TIDAK ADA ✓
+```
+
+**6 fungsi publik** (`getOpenForms`, `getFormBySlug`, `submitFormResponse`,
+`checkDuplicateResponse`, `getCurrentUserRole`, `getCurrentUserPermissions`)
+**tidak** terkunci — diperlukan agar landing page, halaman form publik, dan
+alur submit anonim tetap berfungsi. `checkDuplicateResponse` memang bebas
+`requireAdmin()` tetapi hanya dipanggil dari `submitFormResponseAction` yang
+sudah dibatasi rate limit dan memvalidasi `formId` UUID + NIM.
 
 ---
 
