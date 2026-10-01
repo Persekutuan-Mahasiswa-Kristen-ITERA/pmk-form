@@ -1,10 +1,10 @@
--- ==========================================
+-- =========================================
 -- MIGRASI 002: Fungsi is_admin() + Seed user_roles
 -- TAHAP 1 dari 3 (lihat urutan rollout di bawah / laporan Checkpoint 2)
--- ==========================================
+-- =========================================
 -- AMAN: hanya MENAMBAH objek baru. Tidak menghapus/mengubah policy, tabel,
 -- atau data yang sudah ada. Tidak menonaktifkan RLS.
--- ==========================================
+-- =========================================
 
 -- 1. Fungsi is_admin()
 --    Default-deny: TRUE hanya jika user saat ini punya baris di user_roles.
@@ -29,27 +29,36 @@ comment on function public.is_admin() is
   'TRUE bila user saat ini memiliki baris di public.user_roles (cek admin default-deny). '
   'SECURITY DEFINER + set search_path agar bisa dipakai di RLS tanpa rekursi policy.';
 
--- Beri akses eksekusi ke publik (anon + authenticated); fungsi sendiri sudah
--- default-deny sehingga aman dipanggil siapa saja.
-grant execute on function public.is_admin() to anon, authenticated;
+-- Eksekusi fungsi: cabut dari semua role, lalu berikan HANYA ke authenticated.
+-- Anon TIDAK boleh bisa memanggil is_admin() (auth.uid() mereka null, jadi
+-- hasilnya false, tapi kita tetap membatasi untuk prinsip least-privilege dan
+-- untuk mencegah info-leakage probe). Untuk percobaan anon, lihat catatan
+-- di bawah.
+revoke execute on function public.is_admin() from public, anon;
+grant execute on function public.is_admin() to authenticated;
 
 -- ==========================================
 -- 2. SEED admin pertama
 -- ==========================================
--- GANTI placeholder di bawah dengan UUID user admin yang sebenarnya dari
--- auth.users. Cara mencarinya di Supabase SQL Editor (database roles):
+-- GANTI 'GANTI@EMAIL' dengan email admin yang sebenarnya. Subselect mengambil
+-- UUID dari auth.users berdasarkan email, jadi Anda tidak perlu mencari UUID
+-- manual. Untuk menambah admin lain, duplikat blok INSERT dengan email lain.
 --
---     select id, email, created_at from auth.users order by created_at;
---
--- Setelah itu, masukkan satu baris per admin. Role 'super_admin' = akses penuh.
 -- (Sesuai keputusan Fase 1: ada baris di user_roles = admin. Pembatasan per
 --  divisi ditunda ke Fase 4.)
+
+insert into public.user_roles (user_id, role, division)
+select id, 'super_admin', null
+from auth.users
+where email = 'GANTI@EMAIL'
+on conflict (user_id) do nothing;
+
+-- VERIFIKASI seed berhasil (read-only):
+--   select ur.user_id, u.email, ur.role from public.user_roles ur
+--   join auth.users u on u.id = ur.user_id;
 --
--- CONTOH (hapus komentar dan ganti <ADMIN_USER_UUID>):
---
--- insert into public.user_roles (user_id, role, division)
--- values ('<ADMIN_USER_UUID>', 'super_admin', null)
--- on conflict (user_id) do nothing;
+-- Jika hasilnya 0 baris -> email salah/ketemu; ganti 'GANTI@EMAIL' dan
+-- jalankan ulang blok INSERT di atas.
 
 -- ==========================================
 -- URUTAN ROLLOUT (WAJIB diikuti berurutan)

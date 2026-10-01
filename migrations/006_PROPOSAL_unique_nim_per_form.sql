@@ -1,0 +1,84 @@
+-- ==========================================
+-- MIGRASI 006 (USULAN — JANGAN DIJALANKAN DULU): Unique index parsial duplikat NIM per form
+-- ==========================================
+-- TUJUAN: mencegah dua respons dengan NIM sama pada form yang sama di level
+-- database (belaan terakhir untuk cek duplikat di server action, yang bisa
+-- kalah oleh race condition). Hanya berlaku untuk form yang mengumpulkan
+-- identitas dengan key 'field_applicant_nim' (konvensi sejak recruitment lama).
+--
+-- !! DILAPANGAN DULU: ada duplikat NIM di data produksi (5 pasang, lihat
+-- !! dry-run di bawah). Index akan GAGAL dibuat selama duplikat ada. Sebelum
+-- !! menjalankan migration ini, resolve duplikat dulu (lihat langkah 2).
+--
+-- CARA KERJA:
+--  - Expression index pada (form_id, answers->>'field_applicant_nim').
+--  - Partial (WHERE): hanya baris yang MEMILIKI key field_applicant_nim dan
+--    nilainya tidak kosong. Form tanpa field NIM (survey/presensi) tidak
+--    terkena, dan respons tanpa identitas tidak memblokir.
+--  - answers->> ... menghasilkan text; null jika key tidak ada (sudah di-WHERE).
+--
+-- RISIKO & MITIGASI:
+--  - Index membebani INSERT form_responses sedikit (cek uniqueness). OK.
+--  - Jika aplikasi sengaja mengizinkan respons ganda untuk form tertentu
+--    (mis. presensi berkali-kali), index ini akan menolak. Saat ini hanya
+--    form dengan field_applicant_nim yang terkena, jadi aman.
+--  - Migration 004 belum dijalankan? Tetap bisa pakai index ini (service role
+--    bypass RLS, tapi constraint tetap berlaku).
+-- ==========================================
+
+-- LANGKAH 1: DRY-RUN deteksi duplikat (read-only, jalankan dulu!).
+-- Jika hasilnya 0 baris -> aman lanjut ke LANGKAH 3.
+-- Jika ada baris -> resolve duplikat di LANGKAH 2 dulu.
+--
+--   select
+--     fr.form_id,
+--     fr.answers->>'field_applicant_nim' as nim,
+--     count(*) as dup_count,
+--     array_agg(fr.id order by fr.submitted_at) as response_ids
+--   from public.form_responses fr
+--   where fr.answers ? 'field_applicant_nim'
+--     and coalesce(fr.answers->>'field_applicant_nim', '') <> ''
+--   group by fr.form_id, fr.answers->>'field_applicant_nim'
+--   having count(*) > 1;
+
+-- (Hasil dry-run saat penulisan: 5 pasang duplikat, masing-masing count=2,
+--  pada form fa3242b8…, 7e3f4758… (x3), a70719a8… — resolve dulu!)
+
+-- LANGKAH 2: Resolve duplikat (USULAN — baca hati-hati, sesuaikan kasus).
+-- Per pasang, simpan respons terbaru, hapus yang lama. CONTOH untuk satu pasang:
+--
+--   delete from public.form_responses
+--   where id = '<ID_RESPONS_LAMA>'   -- dari response_ids dry-run, ambil yang bukan pertama
+--   and form_id = '<FORM_ID>';
+--
+-- ULANG untuk setiap pasang, lalu jalankan ulang LANGKAH 1 sampai 0 baris.
+-- BACKUP sebelum menghapus apapun!
+
+-- LANGKAH 3: Buat index (jalankan HANYA setelah LANGKAH 1 = 0 baris).
+-- Pakai CONCURRENTLY agar tidak mengunci tabel (butuh lama? tetap cepat, 240 baris).
+--
+--   create unique index concurrently idx_form_responses_nim_per_form
+--     on public.form_responses (form_id, (answers->>'field_applicant_nim'))
+--     where answers ? 'field_applicant_nim'
+--       and coalesce(answers->>'field_applicant_nim', '') <> '';
+
+-- LANGKAH 4: Verifikasi index ada & bekerja (read-only).
+--
+--   select indexname, indexdef from pg_indexes
+--   where tablename = 'form_responses' and indexname = 'idx_form_responses_nim_per_form';
+--
+--   -- Uji penolakan (harus error unique_violation):
+--   -- insert into public.form_responses (form_id, answers)
+--   -- values ('<FORM_ID_YANG_PUNYA_NIM>', '{"field_applicant_nim":"12345678"}');
+
+-- ROLLBACK:
+--   drop index if exists public.idx_form_responses_nim_per_form;
+
+-- ==========================================
+-- CATATAN max_responses: enforcement di server action (submitFormResponseAction
+-- langkah 3) adalah BEST-EFFORT karena membaca count lalu insert secara
+-- terpisah (race condition: dua submit bersamaan bisa lolos). Solusi
+-- deterministik membutuhkan trigger/constraint tambahan atau lock eksplisit;
+-- prioritas rendah karena kuota jarang dipakai (semua form produksi:
+-- max_responses = null).
+-- ==========================================
