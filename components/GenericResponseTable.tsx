@@ -25,7 +25,21 @@ import Papa from "papaparse";
 import JSZip from "jszip";
 import saveAs from "file-saver";
 import { deleteFormResponseAction } from "@/app/actions/deleteResponse";
-import type { Form, FormResponse } from "@/types/forms";
+import type { Form, FormResponse, FieldConfig, FieldValue } from "@/types/forms";
+
+/**
+ * Resolve a field's answer from a response.
+ *
+ * New submissions are keyed by the stable `field.id`. Responses migrated from
+ * the legacy `submissions` table are keyed by the field's human-readable
+ * `label` instead. Prefer the id and fall back to the label so both shapes
+ * render without rewriting production data.
+ */
+function resolveAnswer(res: FormResponse, field: FieldConfig): FieldValue {
+  const answers = res.answers ?? {};
+  const value = field.id in answers ? answers[field.id] : answers[field.label];
+  return (value as FieldValue) ?? null;
+}
 
 export function GenericResponseTable({
   form,
@@ -65,7 +79,7 @@ export function GenericResponseTable({
         };
 
         fields.forEach((f) => {
-          const val = res.answers[f.id];
+          const val = resolveAnswer(res, f);
           rowData[f.label] = Array.isArray(val) ? val.join(", ") : val || "";
         });
 
@@ -112,8 +126,8 @@ export function GenericResponseTable({
         // Coba cari nama responden untuk folder lampiran
         let respondentName = "Responden_" + res.id.slice(0, 6);
         for (const f of fields) {
-          if (f.label.toLowerCase().includes("nama") && res.answers[f.id]) {
-            respondentName = String(res.answers[f.id]).replace(/[^a-zA-Z0-9]/g, "_");
+          if (f.label.toLowerCase().includes("nama") && resolveAnswer(res, f)) {
+            respondentName = String(resolveAnswer(res, f)).replace(/[^a-zA-Z0-9]/g, "_");
             break;
           }
         }
@@ -207,7 +221,7 @@ export function GenericResponseTable({
                           {new Date(res.submitted_at).toLocaleString("id-ID")}
                         </TableCell>
                         {fields.slice(0, 3).map((f) => {
-                          const val = res.answers[f.id];
+                          const val = resolveAnswer(res, f);
                           const displayVal = Array.isArray(val) ? val.join(", ") : String(val || "-");
                           return (
                             <TableCell key={f.id} className="max-w-[200px] truncate">
@@ -258,7 +272,7 @@ export function GenericResponseTable({
             <div className="space-y-4 pt-2">
               <div className="border rounded-xl p-4 space-y-3 bg-secondary/20">
                 {fields.map((f) => {
-                  const val = selectedResponse.answers[f.id];
+                  const val = resolveAnswer(selectedResponse, f);
                   const displayVal = Array.isArray(val) ? val.join(", ") : val || "-";
                   return (
                     <div key={f.id} className="text-sm">

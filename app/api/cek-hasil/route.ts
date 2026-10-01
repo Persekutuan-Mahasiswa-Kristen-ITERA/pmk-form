@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Bentuk baris selection_results yang dipakai endpoint ini.
+type SelectionPlacement = {
+  nim: string;
+  nama: string;
+  prodi: string | null;
+  departemen: string;
+  divisi: string;
+  wa_group_link: string | null;
+};
+
 // Rate limiting in-memory sederhana per IP (max 15 request per minute)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -38,7 +48,12 @@ function getServiceClient() {
 }
 
 export async function POST(req: Request) {
-  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "anonymous";
+  // "x-forwarded-for" bisa berisi daftar IP yang dipisah koma (proxy chain).
+  // Ambil hop pertama = IP client asli. Kalau tidak ada, fallback x-real-ip.
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  const ip = forwardedFor
+    ? forwardedFor.split(",")[0].trim()
+    : req.headers.get("x-real-ip") || "anonymous";
 
   if (isRateLimited(ip)) {
     return NextResponse.json(
@@ -123,7 +138,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       status: "ACCEPTED",
       nama: applicantName,
-      placements: results.map((r: any) => ({
+      placements: results.map((r: SelectionPlacement) => ({
         departemen: r.departemen,
         divisi: r.divisi === "Unknown" ? "-" : r.divisi,
         prodi: r.prodi,
