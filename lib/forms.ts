@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getAdminUser } from "@/lib/auth";
+import { getAdminUser, requireAdmin } from "@/lib/auth";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Form,
@@ -47,6 +47,7 @@ export async function getFormBySlug(slug: string): Promise<Form | null> {
 
 /** Fetch a single form by id (admin). */
 export async function getFormById(id: string): Promise<Form | null> {
+  await requireAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
@@ -67,6 +68,7 @@ export async function getAllForms(options?: {
   page?: number;
   pageSize?: number;
 }): Promise<{ data: Form[]; count: number }> {
+  await requireAdmin();
   const supabase = await createClient();
   const page = options?.page ?? 1;
   const pageSize = options?.pageSize ?? 20;
@@ -90,6 +92,7 @@ export async function getAllForms(options?: {
 
 /** Count active (open) forms — for admin dashboard stats. */
 export async function countActiveForms(): Promise<number> {
+  await requireAdmin();
   const supabase = await createClient();
   const { count, error } = await supabase
     .from("forms")
@@ -104,6 +107,7 @@ export async function countActiveForms(): Promise<number> {
 export async function createForm(
   payload: Omit<Form, "id" | "created_at" | "updated_at">
 ): Promise<Form> {
+  await requireAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
@@ -120,6 +124,7 @@ export async function updateForm(
   id: string,
   payload: Partial<Omit<Form, "id" | "created_at">>
 ): Promise<Form> {
+  await requireAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
@@ -137,6 +142,7 @@ export async function toggleFormOpen(
   id: string,
   isOpen: boolean
 ): Promise<void> {
+  await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase
     .from("forms")
@@ -148,6 +154,7 @@ export async function toggleFormOpen(
 
 /** Delete a form and its responses (admin). */
 export async function deleteForm(id: string): Promise<void> {
+  await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from("forms").delete().eq("id", id);
   if (error) throw new Error(`Gagal menghapus form: ${error.message}`);
@@ -182,6 +189,7 @@ export async function getFormResponses(
   formId: string,
   options?: { page?: number; pageSize?: number }
 ): Promise<{ data: FormResponse[]; count: number }> {
+  await requireAdmin();
   const supabase = await createClient();
   const page = options?.page ?? 1;
   const pageSize = options?.pageSize ?? 10;
@@ -203,6 +211,7 @@ export async function getFormResponses(
 export async function getAllFormResponses(
   formId: string
 ): Promise<FormResponse[]> {
+  await requireAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("form_responses")
@@ -216,6 +225,7 @@ export async function getAllFormResponses(
 
 /** Count responses for a form. */
 export async function countFormResponses(formId: string): Promise<number> {
+  await requireAdmin();
   const supabase = await createClient();
   const { count, error } = await supabase
     .from("form_responses")
@@ -253,6 +263,7 @@ export async function checkDuplicateResponse(
 
 /** Delete a single response (admin). */
 export async function deleteFormResponse(id: string): Promise<void> {
+  await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase
     .from("form_responses")
