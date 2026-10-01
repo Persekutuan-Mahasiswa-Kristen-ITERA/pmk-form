@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getAdminUser } from "@/lib/auth";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Form,
   FormResponse,
@@ -227,13 +229,18 @@ export async function countFormResponses(formId: string): Promise<number> {
 /**
  * Check for a duplicate response using a specific field value.
  * Useful for preventing the same NIM from submitting twice.
+ *
+ * An optional `client` can be supplied when the caller already holds a client
+ * (e.g. the submission server action, which uses the service-role client so
+ * that the check works for anonymous submitters too).
  */
 export async function checkDuplicateResponse(
   formId: string,
   fieldId: string,
-  value: string
+  value: string,
+  client?: SupabaseClient
 ): Promise<boolean> {
-  const supabase = await createClient();
+  const supabase = client ?? (await createClient());
   const { count, error } = await supabase
     .from("form_responses")
     .select("id", { count: "exact", head: true })
@@ -278,19 +285,19 @@ export async function getCurrentUserRole(): Promise<UserRoleRecord | null> {
 }
 
 /**
- * Derive permissions from the current user's role.
- * Super admin: full access to everything.
- * Divisi admin: access only limited to forms they created.
- * Fallback (any authenticated user without a role row): treated as super_admin
- * temporarily to avoid breaking existing admins before roles are populated.
+ * Derive permissions for the current request.
+ *
+ * DEFAULT-DENY: an authenticated user with no `user_roles` row gets no
+ * permissions. The old implementation fell back to super_admin for any
+ * authenticated user, which is unsafe now that public signups are enabled.
+ *
+ * Per-division scoping (divisi_admin) is deferred to Fase 4; today every
+ * role row grants full admin permissions.
  */
 export async function getCurrentUserPermissions(): Promise<PermissionCheck> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const admin = await getAdminUser();
 
-  if (!user) {
+  if (!admin) {
     return {
       canViewForms: false,
       canCreateForms: false,
@@ -302,32 +309,15 @@ export async function getCurrentUserPermissions(): Promise<PermissionCheck> {
     };
   }
 
-  const roleRecord = await getCurrentUserRole();
-
-  // Fallback: authenticated without a role row = super_admin for backward compat
-  if (!roleRecord || roleRecord.role === "super_admin") {
-    return {
-      canViewForms: true,
-      canCreateForms: true,
-      canEditForm: true,
-      canDeleteForm: true,
-      canViewResponses: true,
-      canDeleteResponses: true,
-      canExportResponses: true,
-      division: roleRecord?.division ?? null,
-    };
-  }
-
-  // divisi_admin: can manage forms they created only (enforced at query level)
   return {
     canViewForms: true,
     canCreateForms: true,
     canEditForm: true,
-    canDeleteForm: false,
+    canDeleteForm: true,
     canViewResponses: true,
-    canDeleteResponses: false,
+    canDeleteResponses: true,
     canExportResponses: true,
-    division: roleRecord.division,
+    division: admin.division,
   };
 }
 
