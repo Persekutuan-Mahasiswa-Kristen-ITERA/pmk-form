@@ -10,6 +10,11 @@ const ALLOWED_FILE_TYPES = new Set([
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
+// Ekstensi yang diizinkan (cek tambahan selain MIME type, karena MIME bisa
+// dipalsukan client). Harus cocok dengan allowed_mime_types bucket di migration 005.
+const ALLOWED_EXTENSIONS = new Set(["pdf", "jpg", "jpeg", "png", "doc", "docx"]);
+// Regex UUID v4 untuk memastikan formId berbentuk UUID sebelum dipakai di path.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Upload an attachment for a generic form response.
@@ -33,8 +38,21 @@ export async function uploadFormAttachment(formData: FormData) {
       throw new Error("Data tidak lengkap untuk upload lampiran.");
     }
 
+    // formId menjadi path folder storage; pastikan bentuknya UUID agar tidak
+    // bisa disuntik path arbitrary (mis. "../../x").
+    if (!UUID_RE.test(formId)) {
+      throw new Error("ID form tidak valid.");
+    }
+
     if (!ALLOWED_FILE_TYPES.has(file.type)) {
       throw new Error("Tipe file tidak didukung. Gunakan PDF, JPG, PNG, DOC, atau DOCX.");
+    }
+
+    // Ekstensi nama file diperiksa terpisah dari MIME karena client bisa
+    // mengirim MIME palsu dengan ekstensi berbeda.
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (!ALLOWED_EXTENSIONS.has(extension)) {
+      throw new Error("Ekstensi file tidak didukung. Gunakan PDF, JPG, PNG, DOC, atau DOCX.");
     }
 
     if (file.size > MAX_FILE_SIZE) {

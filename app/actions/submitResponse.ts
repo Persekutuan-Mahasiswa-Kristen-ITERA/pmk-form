@@ -1,9 +1,11 @@
 "use server";
 
 import { z } from "zod";
+import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkDuplicateResponse } from "@/lib/forms";
 import { buildFormSchema } from "@/lib/form-schema";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { revalidateFormAdminData } from "@/app/actions/revalidate";
 import type { FieldConfig, FormSettings } from "@/types/forms";
 
@@ -37,6 +39,17 @@ export async function submitFormResponseAction(input: {
   answers: Record<string, unknown>;
 }) {
   try {
+    // Rate limit dasar per IP untuk menghambat spam/brute-force submit.
+    // Lihat catatan di lib/rate-limit: in-memory limiter tidak andal lintas
+    // instance serverless; ini lapisan pertahanan pertama saja.
+    const ip = getClientIp(await headers());
+    if (rateLimit(`submit:${ip}`, 10, 60_000)) {
+      return {
+        success: false as const,
+        error: "Terlalu banyak pengiriman. Silakan tunggu beberapa saat.",
+      };
+    }
+
     const parsed = SubmitInputSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false as const, error: "Data tidak valid." };
