@@ -248,8 +248,8 @@ digabung ke 003.
 manage all roles" memakai subquery ke `user_roles` SENDIRI → **infinite
 recursion** (error PostgreSQL "infinite recursion detected in policy") →
 semua operasi tulis super_admin gagal. Diganti dengan policy yang memakai
-`public.is_admin()` (SECURITY DEFINER → evaluasinya lewat RLS, tidak
-rekursif). Policy "User can view own role" tetap (tidak rekursif: hanya
+`public.is_admin()` (SECURITY DEFINER → dieksekusi sebagai owner, **mem-bypass
+RLS**, tidak rekursif). Policy "User can view own role" tetap (tidak rekursif: hanya
 membandingkan `user_id = auth.uid()`).
 
 **Catatan tentang `submissions` / `recruitments` (migration 007)**: tabel

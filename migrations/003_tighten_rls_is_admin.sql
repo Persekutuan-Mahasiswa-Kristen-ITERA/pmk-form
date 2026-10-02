@@ -25,48 +25,47 @@
 -- ==========================================
 
 -- ---------- 1a. forms: SELECT ----------
--- Policy lama: "Admins can view all forms"  using (true)
--- -> SETIAP user login bisa membaca SEMUA form termasuk yang tertutup.
+-- Policy lama: "Admins can view all forms"  using (true)  (to authenticated)
+-- -> SETIAP user yang LOGIN bisa membaca SEMUA form termasuk yang tertutup.
 --
 -- Policy BARU: using (is_open = true or public.is_admin())
 --
--- DAMPAK (sudah dianalisis terhadap kode):
+-- ANALISIS DAMPAK (koreksi: anon TIDAK berubah):
 --
---   * Landing page `/` (memanggil getOpenForms -> select forms):
---       Query sudah memfilter `eq("is_open", true)` di kode, dan halaman ini
---       dipakai oleh anon/orang umum. Dengan policy baru, anon tetap bisa
---       membaca baris is_open = true (klausa pertama). Jadi landing page
---       TIDAK berubah. Catatan: walaupun tanpa policy ini kode sudah
---       memfilter is_open, pengetatan di DB tetap penting agar query lain
---       (mis. ditebak orang) tidak bisa membaca form tertutup.
+--   * ANON (belum login) - TIDAK ADA PERUBAHAN:
+--       Sebelum migration ini, anon hanya dilayani oleh policy
+--       "Public can view open forms" (using is_open = true). Setelah
+--       migration ini pun tetap sama. Jadi perilaku anon/frontpage publik
+--       TIDAK berubah - bukan regresi.
 --
---   * Halaman form publik `/form/[slug]` (memanggil getFormBySlug):
---       getFormBySlug TIDAK memfilter is_open (form tertutup tetap bisa
---       dibuka untuk menampilkan pesan "sudah ditutup"). Policy lama
---       mengizinkan ini untuk semua user login.
---       Dengan policy baru:
---         - user LOGIN & admin -> bisa lihat (klausa is_admin).
---         - user LOGIN & bukan admin -> hanya jika is_open = true.
---         - ANON (belum login) -> hanya jika is_open = true.
---       DAMPAK NYATA: saat form TERTUTUP, user biasa/anon yang membuka
---       `/form/[slug]` TIDAK lagi menerima data form (getFormBySlug kembali
---       null -> halaman menampilkan "form tidak ditemukan", bukan pesan
---       "sudah ditutup"). Ini PERILAKU YANG BERUBAH.
---       Mencegah bocornya struktur form (pertanyaan, field) yang sudah ditutup
---       ke publik — ini justru peningkatan keamanan yang diinginkan.
---       Jika ingin pesan "sudah ditutup" tetap tampil, tambahkan policy SELECT
---       terpisah yang hanya menampilkannya (lihat catatan opsional di bawah).
+--   * User LOGIN NON-ADMIN - INI YANG BERUBAH:
+--       Sebelum: lolos via policy "Admins can view all forms" using (true)
+--       -> bisa membaca form TERTUTUP juga.
+--       Sesudah: hanya is_open = true (klausa pertama) atau is_admin()
+--       (admin saja). Jadi user login biasa kini hanya lihat form terbuka,
+--       sama seperti anon.
 --
---   * Admin dashboard (getFormById/getAllForms -> dipanggil setelah
---     requireAdmin() di layer data-access): admin terautentikasi lolos via
---     klausa is_admin. TIDAK ada dampak.
+--   * ADMIN - TIDAK BERUBAH:
+--       getFormById/getAllForms dipanggil setelah requireAdmin() di layer
+--       data-access. Admin lolos via klausa is_admin(). Dashboard tetap bisa
+--       melihat form tertutup.
 --
--- CATATAN OPSIONAL (tidak dijalankan): bila pesan "sudah ditutup" untuk
--- user anon ingin dipertahankan, buat view/form terpisah yang hanya
--- menampilkannya (mis. policy terpisah select using (true) pada kolom
--- slug+title saja tidak mungkin di RLS tingkat baris). Alternatif sederhana:
--- biarkan kode menampilkan "form sudah ditutup" berdasarkan metadata publik
--- (slug terbuka), atau tetap saja anggap struktur form tertutup = rahasia.
+-- DAMPAK NYATA pada halaman:
+--
+--   * Landing page `/` (getOpenForms): query sudah memfilter is_open = true.
+--     TIDAK berubah untuk siapapun.
+--
+--   * Halaman form publik `/form/[slug]` (getFormBySlug, TIDAK filter is_open):
+--       Saat form TERTUTUP:
+--         - admin -> tetap bisa lihat (is_admin).
+--         - user login biasa & anon -> getFormBySlug kembali null -> halaman
+--           menampilkan "form tidak ditemukan".
+--       INI PERUBAHAN hanya untuk user login biasa (sebelumnya mereka masih
+--       bisa lihat form tertutup). Untuk anon SAMA SAJA seperti sebelumnya.
+--       Mencegah bocornya struktur form (pertanyaan/field) yang sudah ditutup
+--       -> ini peningkatan keamanan yang diinginkan.
+--
+--   * Admin dashboard: TIDAK berubah (admin lolos via is_admin).
 
 drop policy if exists "Admins can view all forms" on public.forms;
 
@@ -190,29 +189,54 @@ create policy "Admins can update files from form-attachments"
 --      select * from public.forms;                       -> SEMUA baris
 --      select * from public.form_responses limit 5;      -> ada baris
 --
--- V4. Alur submit publik tetap berfungsi (via server action/service role):
---      Buka form terbuka di browser -> isi -> Kirim -> harus sukses.
+-- V4. Alur submit publik tetap berfungsi (via server action/service role).
+--      PENTING: tidak ada form produksi yang is_open=true saat ini, jadi
+--      WAJIB buat FORM TES terlebih dulu (lihat urutan rollout langkah 6).
+--      Buka form tes terbuka di browser -> isi -> Kirim -> harus sukses.
 --      (Tidak bisa diuji dari SQL Editor; lihat docs/E2E_TEST_GUIDE.md.)
 --
 -- ==========================================
 -- URUTAN ROLLOUT (WAJIB diikuti berurutan)
 -- ==========================================
--- 1. (Anda) Backup database (dashboard Supabase / pg_dump).
+-- 1. (Anda) Backup database (dashboard Supabase / pg_dump). WAJIB: migration
+--    007 tidak bisa di-rollback tanpa backup (policy lama tak terdokumentasi).
 -- 2. (Anda) Matikan signup publik di Supabase Dashboard.
--- 3. (Anda) Jalankan MIGRASI 002 (fungsi is_admin() + seed admin).
---    Pastikan RAISE NOTICE "SEED ADMIN OK" muncul. Jika migration 002 gagal
+-- 3. (Anda) Jalankan MIGRASI 002 DAN 002b BERSAMAAN (sebelum deploy).
+--    - 002 membuat fungsi is_admin() + seed admin.
+--    - 002b memperbaiki infinite recursion policy user_roles. JIKA 002b
+--      TIDAK dijalankan sebelum deploy, getAdminUser() error 42P17 untuk
+--      SEMUA user -> login admin mendapat 403 -> rollout gagal di langkah 5.
+--    Pastikan RAISE NOTICE "SEED ADMIN OK" (002) muncul. Jika 002 gagal
 --    (email admin tidak ketemu), BERHENTI - jangan lanjut.
 -- 4. (Deploy) Deploy kode aplikasi (requireAdmin() + submit via service role).
 --    JANGAN deploy sebelum langkah 3 selesai.
 -- 5. (Anda) Verifikasi: login admin -> /admin/dashboard OK; user biasa -> 403.
--- 6. (Anda) Jalankan MIGRASI INI (003) dan MIGRASI 007 (legacy tables +
---    user_roles recursion). Dua-duanya bisa dijalankan dalam satu sesi.
--- 7. (Anda) Jalankan verifikasi V1-V4 di atas. Khususnya: alur submit publik
---    (V4) HARUS terverifikasi sebelum melanjutkan.
--- 8. (Anda) Jalankan MIGRASI 005 (limit bucket storage) - kapan saja, aman.
--- 9. (Anda) Setelah semua terverifikasi, aktifkan kembali signup publik HANYA
---    jika memang diperlukan (sebelumnya aktif; pertimbangkan tetap dimatikan
---    karena semua admin sudah di-seed).
+--    Ini juga bukti 002b bekerja (tidak ada error 42P17).
+--
+-- 6. (Anda) BUAT FORM TES SEMENTARA untuk uji submit (lihat langkah 7):
+--    - Login admin -> /admin/forms/new -> judul "FORM UJI E2E (hapus nanti)",
+--      slug "form-uji-e2e", jenis "general".
+--    - Tanggal buka: sekarang; tanggal tutup: +1 jam (PASTIKAN TERBUKA).
+--    - Tambah 1 field teks wajib (mis. "Nama Lengkap").
+--    - Simpan. Pastikan form muncul di landing page /. INI SYARAT: semua form
+--      produksi saat ini is_open=false, sehingga TANPA form tes ini, tidak
+--      ada form terbuka untuk diuji submit-nya.
+--
+-- 7. (Anda) Jalankan MIGRASI INI (003) dan MIGRASI 007 (legacy tables)
+--    dalam satu sesi. Lalu uji alur submit dengan form tes langkah 6:
+--    - Buka /form/form-uji-e2e di tab incognito (anon).
+--    - Isi field -> Kirim -> harus redirect ke halaman sukses.
+--    - Cek di /admin/forms/<id>/responses bahwa respons masuk.
+--    Uji ini WAJIB sebelum langkah 8: jika submit gagal, jangan lanjutkan.
+--
+-- 8. (Anda) Jalankan verifikasi V1-V4 di atas (dengan form tes langkah 6).
+-- 9. (Anda) TUTUP form tes: edit form -> set is_open=false (atau hapus
+--    beserta responsnya) setelah uji selesai. Cleanup lihat
+--    docs/E2E_TEST_GUIDE.md bagian "Bersih-bersih".
+-- 10. (Anda) Jalankan MIGRASI 005 (limit bucket storage) - kapan saja, aman.
+-- 11. (Anda) Setelah semua terverifikasi, aktifkan kembali signup publik HANYA
+--     jika memang diperlukan (sebelumnya aktif; pertimbangkan tetap dimatikan
+--     karena semua admin sudah di-seed).
 --
 -- MIGRASI 006 (unique index NIM) adalah USULAN untuk Fase 2/3, JANGAN dijalankan.
 --

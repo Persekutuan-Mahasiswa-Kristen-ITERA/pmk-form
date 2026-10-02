@@ -103,6 +103,33 @@ export function rateLimit(key: string, limit: number, windowMs: number): boolean
  *     loopback. JANGAN pakai di produksi tanpa proxy di depan, karena
  *     tidak ada header yang terbukti tidak bisa dipalsukan client.
  *
+ * !!! WAJIB DI-SET DI DEPLOYMENT !!!
+ *   Default saat env TIDAK di-set atau kosong: "vercel" (sesuai platform
+ *   kita sekarang).
+ *   Jika di-set ke nilai yang TIDAK dikenal (mis. typo "vercl"), kode
+ *   FAIL-SAFE ke mode "vercel" - bukan "none" - agar proteksi anti-spoofing
+ *   tidak pernah hilang secara tak sengaja.
+ *
+ *   Yang harus di-set per platform:
+ *     Vercel       -> TRUSTED_PROXY=vercel     (atau biarkan default)
+ *     Cloudflare   -> TRUSTED_PROXY=cloudflare
+ *     VPS + nginx  -> TRUSTED_PROXY=nginx      (pastikan nginx menulis
+ *                                                 x-real-ip via
+ *                                                 proxy_set_header)
+ *     Dev lokal    -> TRUSTED_PROXY=none
+ *
+ * !!! BAHAYA jika salah konfigurasi !!!
+ *   Satu-satunya kondisi yang membuat SEMUA request berbagi satu bucket
+ *   "anonymous" adalah: TIDAK ADA header platform terpilih DAN tidak ada
+ *   x-forwarded-for sama sekali. Pada deployment nyata di belakang proxy,
+ *   x-forwarded-for hampir selalu ada, sehingga fallback elemen terakhir
+ *   selalu menghasilkan IP. Jika Anda melihat semua request diberi label
+ *   "anonymous" di log, periksa: (1) nilai TRUSTED_PROXY, (2) apakah proxy
+ *   di depan benar-benar mengirim header yang sesuai.
+ *   Mengabaikan hal ini berarti rate limit tidak efektif (satu bucket untuk
+ *   seluruh aplikasi -> pengguna sah diblokir saat satu penyerang memenuhi
+ *   kuota).
+ *
  * KEKURANGAN umum (semua mode): tidak ada header yang bisa membedakan IP
  * client asli dari NAT gateway yang dipakai banyak orang (mis. jaringan
  * kampus). User di balik NAT yang sama berbagi IP -> berbagi kuota rate
@@ -113,7 +140,12 @@ export function rateLimit(key: string, limit: number, windowMs: number): boolean
  * `headers()` next/headers di server action).
  */
 export function getClientIp(req: Headers): string {
-  const trustedProxy = (process.env.TRUSTED_PROXY ?? "vercel").toLowerCase();
+  // !!! DEFAULT "vercel" - sesuai deployment kita. Jika env TRUSTED_PROXY
+  // di-set ke nilai TIDAK dikenal, kita FAIL-SAFE ke mode "vercel" BUKAN ke
+  // "none", agar tidak ada platform yang tanpa sengaja kehilangan proteksi
+  // anti-spoofing. Lihat JSDoc untuk nilai yang harus di-set per platform.
+  const raw = (process.env.TRUSTED_PROXY ?? "vercel").trim().toLowerCase();
+  const trustedProxy = raw === "" ? "vercel" : raw;
 
   function lastHop(headerName: string): string | null {
     const value = req.get(headerName);

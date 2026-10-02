@@ -1,0 +1,116 @@
+-- ==========================================
+-- MIGRASI 002b: Perbaiki infinite recursion policy user_roles
+-- TAHAP 1b — JALANKAN BERSAMAAN DENGAN MIGRASI 002, SEBELUM DEPLOY.
+-- ==========================================
+-- MASALAH (ditemukan di putaran review Checkpoint 3):
+--
+--   Policy lama "Super admin can manage all roles" (dari migration 001)
+--   adalah policy FOR ALL dengan klausa USING yang ber-subquery ke tabel
+--   user_roles SENDIRI:
+--
+--       using (exists (select 1 from public.user_roles ur
+--                     where ur.user_id = auth.uid() and ur.role='super_admin'))
+--
+--   PostgreSQL mengevaluasi policy FOR ALL pada SETIAP perintah, termasuk
+--   SELECT. Karena subquery membaca user_roles (yang juga kena RLS), policy
+--   memanggil dirinya sendiri -> PostgreSQL mendeteksi dan melempar:
+--
+--       ERROR 42P17: infinite recursion detected in policy for relation
+--       "user_roles"
+--
+--   AKIBATNYA BESAR: query `select ... from user_roles where user_id = ...`
+--   yang dilakukan oleh getAdminUser() (lib/auth.ts) SELALU error untuk SETIAP
+--   user. Karena getAdminUser() fail-closed (error -> return null),
+--   maka SEMUA user, TERMASUK admin yang sudah di-seed di migration 002,
+--   akan dianggap non-admin. Artinya:
+--
+--       Setelah migration 002 dijalankan dan kode di-deploy, login admin
+--       TETAP melihat halaman 403. Rollout langkah 4/5 GAGAL.
+--
+--   Ini sebabnya perbaikan TIDAK boleh ditunda ke migration 007 (yang
+--   dijalankan setelah deploy). Migration INI (002b) harus dijalankan
+--   BERSAMA 002, sebelum deploy.
+--
+--   Catatan: selama user_roles masih kosong (sebelum seed), error 42P17 ini
+--   tidak terlihat karena hasilnya juga null. Inilah alasan masalah lolos
+--   di Fase 0 - belum ada admin sama sekali.
+--
+-- SOLUSI: ganti policy dengan yang memakai public.is_admin(). Fungsi itu
+-- SECURITY DEFINER: dieksekusi dengan hak akses OWNER-nya (superuser
+-- postgres), sehingga query di dalamnya MEM-BYPASS RLS - bukan "dievaluasi
+-- lewat RLS" seperti yang salah ditulis di versi sebelumnya. Karena tidak
+-- ada query ke user_roles dari dalam policy yang kena RLS, rekursi hilang.
+--
+-- AMAN: hanya DROP POLICY lama + CREATE POLICY baru. Tidak sentuh data.
+-- ==========================================
+
+drop policy if exists "Super admin can manage all roles" on public.user_roles;
+
+-- Policy pengganti: admin (is_admin()) bisa lihat & kelola semua role.
+-- SEMUA admin (super_admin maupun divisi_admin) dapat akses kelola role
+-- untuk saat ini. Jika ingin membatasi hanya super_admin yang boleh
+-- mengelola role, tambahkan cek role='super_admin' di Fase 4 (butuh baca
+-- role baris sendiri - bisa lewat is_admin() + join, hindari rekursi).
+create policy "Admins can manage all roles"
+  on public.user_roles for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+-- Policy "User can view own role" (SELECT baris sendiri, user_id = auth.uid())
+-- DIPERTAHANKAN tidak diubah:
+--   - getAdminUser() butuh membaca baris role sendiri untuk menentukan
+--     apakah user ini admin. Dengan policy ini + is_admin(), query
+--     getAdminUser() tidak lagi error 42P17.
+--   - Tidak ada rekursi: hanya membandingkan user_id = auth.uid(), tidak
+--     membaca tabel lain.
+
+-- ==========================================
+-- VERIFIKASI PASCA-MIGRATION (read-only, WAJIB sebelum deploy)
+-- ==========================================
+-- V1. Policy lama harus hilang, policy baru muncul:
+--
+--    select policyname, cmd, roles, qual
+--    from pg_policies
+--    where schemaname = 'public' and tablename = 'user_roles'
+--    order by policyname;
+--
+--    Yang diharapkan:
+--      Admins can manage all roles | ALL   | {authenticated} | (is_admin())
+--      User can view own role      | SELECT| {authenticated} | (user_id = auth.uid())
+--
+--    Dan TIDAK ada lagi: "Super admin can manage all roles".
+--
+-- V2. Bukti recursion hilang - harus dilakukan SEBELUM deploy.
+--    Caranya: login sebagai admin yang sudah di-seed di migration 002,
+--    lalu jalankan di SQL Editor (bukan service role):
+--
+--    -- a) Query yang sama dengan getAdminUser() - harus KEMBALI BARIS,
+--    --    bukan error 42P17:
+--    select * from public.user_roles where user_id = auth.uid();
+--
+--    -- b) Operasi tulis super_admin - harus SUKSES:
+--    insert into public.user_roles (user_id, role)
+--    values ('<UUID_USER_TEST>', 'divisi_admin');
+--    delete from public.user_roles where user_id = '<UUID_USER_TEST>';
+--
+--    Jika (a) atau (b) error 42P17, JANGAN deploy - perbaiki dulu.
+--
+-- V3. Pastikan getAdminUser() di aplikasi mengembalikan admin yang benar:
+--    login admin -> buka /admin/dashboard -> harus tampil normal (bukan 403).
+--
+-- ROLLBACK:
+--   Pulihkan policy lama (Catatan: ini mengembalikan bug recursion, jadi
+--   rollback HANYA jika Anda ingin kembali ke kondisi pra-migration ini):
+--
+--   drop policy if exists "Admins can manage all roles" on public.user_roles;
+--   create policy "Super admin can manage all roles" on public.user_roles
+--     for all to authenticated
+--     using (exists (select 1 from public.user_roles ur
+--                    where ur.user_id = auth.uid() and ur.role = 'super_admin'))
+--     with check (exists (select 1 from public.user_roles ur
+--                    where ur.user_id = auth.uid() and ur.role = 'super_admin'));
+--
+--   Lalu drop function is_admin() jika ingin benar-benar kembali
+--   (lihat rollback di migration 002 - tetap SETELAH rollback policy).
+-- ==========================================

@@ -8,8 +8,12 @@
 
 -- 1. Fungsi is_admin()
 --    Default-deny: TRUE hanya jika user saat ini punya baris di user_roles.
---    SECURITY DEFINER agar evaluasinya LEWAT RLS (mem bypass policy user_roles)
---    -> mencegah rekursi policy saat dipakai di RLS tabel lain.
+--    SECURITY DEFINER: fungsi dieksekusi dengan hak akses OWNER-nya
+--    (role superuser postgres), sehingga query di dalamnya MEM-BYPASS RLS
+--    - bukan "dievaluasi lewat RLS". Ini penting: kalau tidak bypass,
+--    pemanggilan is_admin() dari policy user_roles akan membaca user_roles
+--    yang kena RLS -> rekursi (lihat migration 002b). Dengan bypass, evaluasi
+--    is_admin() tidak memicu policy tabel sama sekali.
 --    search_path dikunci ke schema public untuk mencegah hijack search_path.
 create or replace function public.is_admin()
 returns boolean
