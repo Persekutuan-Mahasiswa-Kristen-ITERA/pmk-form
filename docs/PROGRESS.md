@@ -59,11 +59,11 @@ dan `git log` terlebih dulu saat melanjutkan sesi.
 |---|---|---|
 | `002` `is_admin()` + seed | ✅ **SUDAH DIJALANKAN & TERVERIFIKASI** | Selesai GATE 0: seed super_admin `biroitpmkitera@gmail.com` |
 | `002b` perbaiki recursion policy `user_roles` | ✅ **SUDAH DIJALANKAN** | Selesai GATE 0 (bersama 002) |
-| `003` perketat RLS + tutup anon INSERT | ⬜ belum dijalankan | Rollout langkah 7 (setelah deploy + verifikasi) |
+| `003` perketat RLS + tutup anon INSERT | ✅ **SUDAH DIJALANKAN & TERVERIFIKASI** | Selesai GATE 0 (bersama 007) |
 | `004` (penanda; isinya di 003 bagian 2b) | — | Jangan dijalankan sendiri |
 | `005` limit bucket storage | ⬜ belum dijalankan | Rollout langkah 10 (kapan saja, aman) |
 | `006` USULAN `nim_normalized` | ⬜ usulan Fase 2/3 | Jangan dijalankan sekarang |
-| `007` tabel legacy → admin only | ⬜ belum dijalankan | Rollout langkah 7 (bersama 003) |
+| `007` tabel legacy → admin only | ✅ **SUDAH DIJALANKAN & TERVERIFIKASI** | Selesai GATE 0 (bersama 003) |
 
 **Catatan kritis 002b**: policy lama `"Super admin can manage all roles"` (FOR ALL, subquery ke
 `user_roles` sendiri) menyebabkan error `42P17` pada SELECT juga → `getAdminUser()` fail-closed
@@ -110,6 +110,13 @@ bersama 002, sebelum deploy. Masalah ini lolos di Fase 0 karena `user_roles` mas
       pasca-OAuth Google (Fase 5) saat ada user non-admin sungguhan.
 - [ ] Buat form tes, uji submit E2E, tutup form tes
 - [ ] Jalankan migration 003 + 007; verifikasi V1-V4
+      ✅ SELESAI & TERVERIFIKASI melalui API (anon vs service role):
+         - form_responses: 240 (service) vs 0 (anon) - data aman, anon diblokir
+         - forms: 7 vs 0 | selection_results: 54 vs 0 | submissions: 239 vs 0
+         - recruitments: 7 vs 0 (policy 'Public can view open recruitments' hilang)
+         - user_roles: 1 vs 0
+         - V3: anon INSERT form_responses -> HTTP 401 `42501 new row violates
+           row-level security policy` ✅
 - [ ] Jalankan migration 005
 - [ ] Merge PR #3 ke main
 
