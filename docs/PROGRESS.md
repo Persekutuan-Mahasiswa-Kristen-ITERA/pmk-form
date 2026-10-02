@@ -46,6 +46,10 @@ dan `git log` terlebih dulu saat melanjutkan sesi.
    fail-safe ke `vercel` bila nilai tak dikenal. Fallback selalu elemen **terakhir** `x-forwarded-for`
    (anti spoofing).
 10. **Platform deployment: Vercel.**
+11. **Tes 403 untuk user biasa di-skip (Opsi B)** saat GATE 0: signup publik sudah
+    dimatikan + tidak ada halaman signup → hanya 1 user (admin). Validasi 403
+    akan dilakukan ulang setelah **OAuth Google** (Fase 5) diaktifkan, saat sudah
+    ada user non-admin sungguhan. Login admin terverifikasi = bukti 002b bekerja.
 
 ---
 
@@ -98,6 +102,12 @@ bersama 002, sebelum deploy. Masalah ini lolos di Fase 0 karena `user_roles` mas
 - [ ] Push branch & buat PR — ✅ SELESAI (PR #3, checks passing)
 - [ ] **Cek env Vercel: `SUPABASE_SERVICE_ROLE_KEY` sudah ada?**
 - [ ] Deploy (Vercel auto-build dari PR #3) → verifikasi admin masuk + user 403
+      ✅ ADMIN LOGIN TERVERIFIKASI (`biroitpmkitera@gmail.com` bisa masuk dashboard
+      → bukti 002b bekerja, TIDAK ADA error 42P17 di produksi).
+      ⏭ TES 403 USER BIASA DI-SKIP (Opsi B) — signup publik sudah dimatikan
+      (disable_signup=true) dan app tidak punya halaman signup, jadi hanya ada
+      1 user (admin). Bukti tidak-ada-42P17 sudah cukup. Akan divalidasi lagi
+      pasca-OAuth Google (Fase 5) saat ada user non-admin sungguhan.
 - [ ] Buat form tes, uji submit E2E, tutup form tes
 - [ ] Jalankan migration 003 + 007; verifikasi V1-V4
 - [ ] Jalankan migration 005
