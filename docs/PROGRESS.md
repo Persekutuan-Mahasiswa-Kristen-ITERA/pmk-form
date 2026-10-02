@@ -3,8 +3,8 @@
 Sumber kebenaran untuk status pekerjaan. Baca file ini, `docs/AUTHORIZATION_MATRIX.md`,
 dan `git log` terlebih dulu saat melanjutkan sesi.
 
-**Branch saat ini:** `chore/cleanup-and-hardening` (Fase 1; 14 commit, belum di-merge ke main)
-**Diperbarui:** setelah Checkpoint 3 putaran 3 (commit `fe1bf52`)
+**Branch saat ini:** `chore/cleanup-and-hardening` (Fase 1; 16 commit, sudah di-push, **PR #3 terbuka, checks passing**)
+**Diperbarui:** setelah GATE 0 — migration 002+002b SUDAH dijalankan & terverifikasi di produksi
 
 ---
 
@@ -15,7 +15,7 @@ dan `git log` terlebih dulu saat melanjutkan sesi.
 | Fase 0 — verifikasi & baseline | ✅ SELESAI | tsc/eslint/build, audit RLS, snapshot data produksi |
 | Fase 1 — keamanan (otorisasi) | ⏸ KODE SELESAI, ROLLOUT MENUNGGU KONFIRMASI | migration ditulis, **belum dijalankan** |
 | Fase 1.5 — hardening | ✅ KODE SELESAI | rate limit, upload hardening, matriks otorisasi |
-| GATE 0 | 🛑 MENUNGGU | checklist rollout Fase 1 belum dikonfirmasi |
+| GATE 0 | 🔄 DALAM PROSES | 002+002b ✅ ; backup DB ⏭ SKIP (ganti snapshot policy); sisanya menunggu |
 | Fase 2 — pembersihan redundansi | ⬜ BELUM MULAI | branch `chore/cleanup-redundancy` (dibuat setelah GATE 0) |
 | Fase 3 — enforce form config | ⬜ BELUM MULAI | |
 | Fase 4 — keputusan strategis | ⬜ BELUM MULAI | |
@@ -53,8 +53,8 @@ dan `git log` terlebih dulu saat melanjutkan sesi.
 
 | File | Status | Kapan dijalankan (rencana) |
 |---|---|---|
-| `002` `is_admin()` + seed | ⬜ belum dijalankan | Rollout langkah 3 (bersama 002b, sebelum deploy) |
-| `002b` perbaiki recursion policy `user_roles` | ⬜ belum dijalankan | Rollout langkah 3 — **WAJIB sebelum deploy** |
+| `002` `is_admin()` + seed | ✅ **SUDAH DIJALANKAN & TERVERIFIKASI** | Selesai GATE 0: seed super_admin `biroitpmkitera@gmail.com` |
+| `002b` perbaiki recursion policy `user_roles` | ✅ **SUDAH DIJALANKAN** | Selesai GATE 0 (bersama 002) |
 | `003` perketat RLS + tutup anon INSERT | ⬜ belum dijalankan | Rollout langkah 7 (setelah deploy + verifikasi) |
 | `004` (penanda; isinya di 003 bagian 2b) | — | Jangan dijalankan sendiri |
 | `005` limit bucket storage | ⬜ belum dijalankan | Rollout langkah 10 (kapan saja, aman) |
@@ -65,6 +65,8 @@ dan `git log` terlebih dulu saat melanjutkan sesi.
 `user_roles` sendiri) menyebabkan error `42P17` pada SELECT juga → `getAdminUser()` fail-closed
 untuk **semua** user → login admin mendapat 403 setelah deploy. Karena itu 002b **harus** dijalankan
 bersama 002, sebelum deploy. Masalah ini lolos di Fase 0 karena `user_roles` masih kosong.
+
+**Status 002b setelah dijalankan**: `is_admin()` sudah ada di DB, seed admin sudah ada.
 
 ---
 
@@ -86,16 +88,20 @@ bersama 002, sebelum deploy. Masalah ini lolos di Fase 0 karena `user_roles` mas
 
 ## LANGKAH MANUAL YANG MENUNGGU
 
-- [ ] Backup database produksi
-- [ ] Matikan signup publik
-- [ ] Jalankan migration 002 + 002b; konfirmasi "SEED ADMIN OK"
-- [ ] Deploy branch `chore/cleanup-and-hardening`
-- [ ] Verifikasi admin/user biasa
+- [x] Backup database produksi → **SKIP** (pg_dump & backup otomatis tidak bisa
+      dipakai; diganti `docs/LEGACY_POLICY_SNAPSHOT.md` yang mencakup persis
+      policy yang diubah 007. Data sendiri tidak dihapus oleh 007.)
+- [x] Matikan signup publik — **KONFIRMASI DULU**: apakah sudah dimatikan sebelum
+      deploy? (Belum dikonfirmasi user.)
+- [x] Jalankan migration 002 + 002b — ✅ SELESAI & TERVERIFIKASI
+      (seed `biroitpmkitera@gmail.com` = super_admin; `is_admin()` ada)
+- [ ] Push branch & buat PR — ✅ SELESAI (PR #3, checks passing)
+- [ ] **Cek env Vercel: `SUPABASE_SERVICE_ROLE_KEY` sudah ada?**
+- [ ] Deploy (Vercel auto-build dari PR #3) → verifikasi admin masuk + user 403
 - [ ] Buat form tes, uji submit E2E, tutup form tes
-- [ ] Jalankan migration 003 + 007; verifikasi V1–V4
+- [ ] Jalankan migration 003 + 007; verifikasi V1-V4
 - [ ] Jalankan migration 005
-- [ ] Merge `chore/cleanup-and-hardening` ke main (GATE 0)
-- [ ] Set env produksi: `SUPABASE_SERVICE_ROLE_KEY`, `TRUSTED_PROXY=vercel`
+- [ ] Merge PR #3 ke main
 
 ---
 
@@ -108,7 +114,8 @@ bersama 002, sebelum deploy. Masalah ini lolos di Fase 0 karena `user_roles` mas
    MIME palsu (stored-XSS via bucket) — rincian di `docs/AUTHORIZATION_MATRIX.md` bagian "SISA RISIKO upload".
 4. **Nama policy lama `selection_results`/`submissions`/`recruitments` tidak terdokumentasi** (schema pra-001).
    Migration 007 memakai drop dinamis dari `pg_policies` + `RAISE NOTICE` agar nama tercatat.
-   Rollback 007 jujur: policy lama tidak bisa dipulihkan tanpa backup.
+   **SELESAI**: snapshot lengkap sudah diambil ke `docs/LEGACY_POLICY_SNAPSHOT.md`,
+   sehingga rollback 007 kini LENGKAP memulihkan policy asli — tidak butuh backup DB.
 5. **`getAdminUser()`/`requireAdmin()` belum dibungkus React `cache()`** — dijadwalkan Fase 2 langkah 7.
 6. **Email admin seed**: `biroitpmkitera@gmail.com` (migration 002, RAISE EXCEPTION jika tak ditemukan).
 

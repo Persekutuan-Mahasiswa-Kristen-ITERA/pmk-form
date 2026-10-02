@@ -33,7 +33,9 @@
 --   jika tebakan salah -> policy lama TETAP HIDUP dan tetap permisif. Karena
 --   itu kita baca nama policy dari pg_policies dan drop secara dinamis.
 --   Nama setiap policy yang dihapus DICETAK via RAISE NOTICE agar Anda bisa
---   mencatatnya (untuk audit atau rollback manual bila diperlukan).
+--   memverifikasi policy mana yang terhapus. Definisi LENGKAP policy lama
+--   sudah di-snapshot saat GATE 0 ke docs/LEGACY_POLICY_SNAPSHOT.md, sehingga
+--   bagian ROLLBACK di bawah bisa memulihkannya persis seperti semula.
 --
 -- AMAN: tidak DROP tabel/kolom/data. Hanya DROP POLICY lalu CREATE POLICY
 -- baru. Data di tabel lama TIDAK DISENTUH.
@@ -142,29 +144,96 @@ commit;
 --      -> harus tetap kembali status seleksi
 --
 -- ROLLBACK:
---   !!! JUJUR: policy lama untuk ketiga tabel ini TIDAK BISA DIPULIHKAN
---   !!! otomatis oleh migration ini. Sebabnya: nama policy lama tidak
---   !!! terdokumentasi di repo (dibuat di schema pra-001), dan definisinya
---   !!! (klausa using/with_check asli) tidak disimpan saat migration ini
---   !!! dijalankan. RAISE NOTICE di atas hanya MENCETAK nama; jika Anda
---   !!! tidak mencatatnya, informasi itu hilang.
---   !!!
---   !!! Cara rollback yang andal: pulihkan dari BACKUP database yang dibuat
---   !!! sebelum rollout (lihat langkah 1 urutan rollout). Itu satu-satunya
---   !!! jaminan untuk mendapatkan kembali definisi policy asli.
---   !!!
---   !!! Jika Anda MENCATAT nama policy dari RAISE NOTICE dan tahu definisinya,
---   !!! bisa pulihkan manual:
---
---   begin;
---   drop policy if exists "Admins can manage selection results" on public.selection_results;
---   drop policy if exists "Admins can manage submissions" on public.submissions;
---   drop policy if exists "Admins can manage recruitments" on public.recruitments;
---   -- Buat ulang policy lama SESUAI catatan Anda, contoh bentuk umum:
---   -- create policy "<nama lama>" on public.selection_results
---   --   for all to authenticated using (true) with check (true);
---   commit;
---
---   Catatan: rollback ini mengembalikan kondisi permisif (user login biasa
---   bisa baca semua data pendaftar) - hanya lakukan jika ada masalah darurat.
+-- !!! BERITA BAIK: rollback 007 SEKARANG LENGKAP dan jujur.
+-- !!! Sebelum rollout, definisi policy lama ketiga tabel ini TIDAK terdokumentasi
+-- !!! di repo. Tapi Anda sudah mengambil SNAPSHOTNYA saat GATE 0 (query
+-- !!! pg_policies) dan menyimpannya di docs/LEGACY_POLICY_SNAPSHOT.md.
+-- !!! Karena itu rollback di bawah ini memakai definisi ASLI persis seperti
+-- !!! sebelum 007 - TIDAK butuh backup DB seluruhnya.
+-- !!!
+-- !!! (Jika Anda belum mengambil snapshot, jalanankan query di
+-- !!!  docs/LEGACY_POLICY_SNAPSHOT.md SEBELUM migration 007, karena blok
+-- !!!  rollback ini butuh data itu untuk benar-benar akurat.)
+
+begin;
+
+-- 1. Hapus policy admin-only hasil 007
+drop policy if exists "Admins can manage selection results" on public.selection_results;
+drop policy if exists "Admins can manage submissions" on public.submissions;
+drop policy if exists "Admins can manage recruitments" on public.recruitments;
+
+-- 2. Pulihkan policy lama PERSIS seperti snapshot (docs/LEGACY_POLICY_SNAPSHOT.md)
+
+-- selection_results
+create policy "Admins can manage selection results"
+  on public.selection_results for all
+  to authenticated
+  using (true)
+  with check (true);
+
+-- submissions
+drop policy if exists "Admins can view submissions" on public.submissions;
+drop policy if exists "Admins can update submissions" on public.submissions;
+drop policy if exists "Admins can delete submissions" on public.submissions;
+drop policy if exists "Public can submit applications" on public.submissions;
+
+create policy "Admins can view submissions"
+  on public.submissions for select
+  to authenticated
+  using (true);
+
+create policy "Admins can update submissions"
+  on public.submissions for update
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "Admins can delete submissions"
+  on public.submissions for delete
+  to authenticated
+  using (true);
+
+create policy "Public can submit applications"
+  on public.submissions for insert
+  to anon, authenticated
+  with check (true);
+
+-- recruitments
+drop policy if exists "Admins can view all recruitments" on public.recruitments;
+drop policy if exists "Admins can insert recruitments" on public.recruitments;
+drop policy if exists "Admins can update recruitments" on public.recruitments;
+drop policy if exists "Admins can delete recruitments" on public.recruitments;
+drop policy if exists "Public can view open recruitments" on public.recruitments;
+
+create policy "Admins can view all recruitments"
+  on public.recruitments for select
+  to authenticated
+  using (true);
+
+create policy "Admins can insert recruitments"
+  on public.recruitments for insert
+  to authenticated
+  with check (true);
+
+create policy "Admins can update recruitments"
+  on public.recruitments for update
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "Admins can delete recruitments"
+  on public.recruitments for delete
+  to authenticated
+  using (true);
+
+create policy "Public can view open recruitments"
+  on public.recruitments for select
+  to public
+  using (is_open = true);
+
+commit;
+
+-- Catatan: rollback ini mengembalikan kondisi permisif lama (user login biasa
+-- bisa baca semua data pendaftar). Hanya lakukan jika ada masalah darurat.
+-- Setelah rollback, jalankan ulang migration 007 setelah masalah diperbaiki.
 -- ==========================================
