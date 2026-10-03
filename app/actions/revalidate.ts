@@ -19,21 +19,3 @@ export async function revalidateFormAdminData(formId?: string) {
     revalidatePath(`/admin/forms/${formId}/responses`);
   }
 }
-
-/**
- * Compatibility helpers for the currently active recruitment UI.
- * Keep them until the public and admin routes are converted in later phases.
- */
-export async function revalidateRecruitment(slug: string) {
-  revalidatePath(`/recruitment/${slug}`);
-  revalidatePath(`/`);
-}
-
-export async function revalidateAdminData(recruitmentId?: string) {
-  revalidatePath(`/admin/dashboard`);
-  revalidatePath(`/admin/recruitments`);
-
-  if (recruitmentId) {
-    revalidatePath(`/admin/recruitments/${recruitmentId}/applicants`);
-  }
-}

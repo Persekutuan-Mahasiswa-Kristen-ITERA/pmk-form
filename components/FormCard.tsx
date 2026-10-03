@@ -1,6 +1,6 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, ChevronRight, FileText, Sparkles } from "lucide-react";
+import { Calendar, Clock, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
@@ -16,9 +16,11 @@ export function FormCard({ slug, title, description, closeDate, formType }: Form
     const deadline = new Date(closeDate);
     const isClosingSoon = deadline.getTime() - new Date().getTime() < 3 * 24 * 60 * 60 * 1000; // 3 days
 
-    // Tentukan route tujuan berdasarkan jenis form
+    // Semua jenis form sekarang memakai route generik /form/[slug] (Fase 1).
+    // Cabang lama isRecruitment ? `/form/${slug}` : `/form/${slug}` selalu
+    // menghasilkan nilai yang sama -> dead code, dihapus (Fase 2-2).
+    const href = `/form/${slug}`;
     const isRecruitment = formType === "recruitment";
-    const href = isRecruitment ? `/form/${slug}` : `/form/${slug}`;
 
     const badgeColors: Record<string, string> = {
         recruitment: "bg-primary text-primary-foreground",

@@ -14,19 +14,78 @@ import type {
 // FORMS — CRUD service
 // ==========================================
 
+/**
+ * Definisi tunggal "form aktif" (Fase 2-4).
+ *
+ * Sebuah form AKTIF (tampil di landing & dihitung di statistik) jika dan hanya
+ * jika: `is_open = true` DAN `open_date <= now()` DAN `close_date > now()`.
+ *
+ * `open_date`/`close_date` NOT NULL menurut schema produksi (migration 001),
+ * tapi tetap dijaga defensif untuk data luar/migrasi parsial.
+ *
+ * Satu helper ini dipakai bersama oleh: landing page, dashboard admin, dan
+ * `countActiveForms()`. Jangan menulis definisi sebanding di tempat lain.
+ */
+export function isFormActive(form: {
+  is_open: boolean | null;
+  open_date: string | null;
+  close_date: string | null;
+}): boolean {
+  if (!form.is_open) return false;
+  const now = Date.now();
+  if (form.open_date && new Date(form.open_date).getTime() > now) return false;
+  if (form.close_date && new Date(form.close_date).getTime() <= now) return false;
+  return true;
+}
+
+/**
+ * Terapkan filter "form aktif" ke sebuah query builder Supabase pada `forms`.
+ *
+ * CATATAN: supabase-js memakai tipe builder yang sangat dalam; membungkusnya
+ * dengan generic sendiri memicu "Type instantiation is excessively deep".
+ * Karena itu filter diaplikasikan inline di tiap pemanggilan, dan `isFormActive`
+ * di atas jadi definisi kanonik yang harus dijaga konsisten.
+ */
+
 /** Fetch all open forms for the public landing page. */
-export async function getOpenForms(): Promise<Form[]> {
+export async function getOpenForms(options?: {
+  formType?: FormType;
+}): Promise<Form[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const now = new Date().toISOString();
+
+  // Filter ini harus konsisten dengan isFormActive().
+  let query = supabase
     .from("forms")
     .select("*")
     .eq("is_open", true)
-    .lte("open_date", new Date().toISOString())
-    .gte("close_date", new Date().toISOString())
-    .order("created_at", { ascending: false });
+    .lte("open_date", now)
+    .gt("close_date", now);
+
+  if (options?.formType) {
+    query = query.eq("form_type", options.formType);
+  }
+  const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) throw new Error(`Gagal memuat form: ${error.message}`);
   return (data ?? []) as Form[];
+}
+
+/** Count active forms for the public landing stats (RLS-safe, no admin needed). */
+export async function countOpenForms(): Promise<number> {
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  // Filter ini harus konsisten dengan isFormActive().
+  const { count, error } = await supabase
+    .from("forms")
+    .select("id", { count: "exact", head: true })
+    .eq("is_open", true)
+    .lte("open_date", now)
+    .gt("close_date", now);
+
+  if (error) throw new Error(`Gagal menghitung form aktif: ${error.message}`);
+  return count ?? 0;
 }
 
 /** Fetch a single form by slug (public). */

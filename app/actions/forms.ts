@@ -1,18 +1,18 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { createForm, updateForm } from "@/lib/forms";
 import { revalidateForm } from "@/app/actions/revalidate";
 import type { Form } from "@/types/forms";
 
 type FormPayload = Omit<Form, "id" | "created_at" | "updated_at">;
 
+// F2-1: server action memanggil data-access layer (lib/forms) alih-alih
+// menulis query inline. createForm/updateForm sudah memanggil requireAdmin()
+// dan melempar error dengan pesan yang aman ditampilkan ke client.
+
 export async function createFormAction(payload: FormPayload) {
   try {
-    await requireAdmin();
-    const supabase = await createClient();
-    const { data, error } = await supabase.from("forms").insert(payload).select("id, slug").single();
-    if (error) throw new Error(error.message);
+    const data = await createForm(payload);
     await revalidateForm(payload.slug);
     return { success: true as const, data };
   } catch (err) {
@@ -22,15 +22,7 @@ export async function createFormAction(payload: FormPayload) {
 
 export async function updateFormAction(id: string, payload: Partial<FormPayload>) {
   try {
-    await requireAdmin();
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("forms")
-      .update({ ...payload, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .select("id, slug")
-      .single();
-    if (error) throw new Error(error.message);
+    const data = await updateForm(id, payload);
     if (payload.slug) await revalidateForm(payload.slug);
     return { success: true as const, data };
   } catch (err) {

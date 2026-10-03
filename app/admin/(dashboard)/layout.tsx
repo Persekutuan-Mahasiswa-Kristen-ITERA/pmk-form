@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Home, FileStack, ShieldAlert } from "lucide-react";
 import Image from "next/image";
+import { PMK_LOGO_URL } from "@/components/PMKLogo";
 import { SignOutButton } from "@/components/SignOutButton";
 import { getAdminUser } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,7 +41,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <div className="flex items-center gap-8 lg:gap-12">
             <Link href="/admin/dashboard" className="flex items-center gap-3 transition-transform hover:scale-105">
               <div className="bg-primary/5 p-1.5 rounded-full border border-accent/30 shadow-sm">
-                <Image src="https://res.cloudinary.com/dm3zixaz4/image/upload/v1772567328/PMK_LOGO-removebg-preview_oydcdq.avif" alt="PMK Logo" width={36} height={36} className="drop-shadow-sm" priority />
+                <Image src={PMK_LOGO_URL} alt="PMK Logo" width={36} height={36} className="drop-shadow-sm" priority />
               </div>
               <span className="hidden sm:inline-block font-serif font-bold text-xl text-primary tracking-tight">PMK Admin</span>
             </Link>

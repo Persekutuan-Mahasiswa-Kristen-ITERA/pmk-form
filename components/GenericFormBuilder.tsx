@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -27,8 +27,6 @@ import {
   ArrowLeft,
   Copy,
   Settings as SettingsIcon,
-  Filter,
-  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -162,8 +160,16 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
   const [slug, setSlug] = useState(initialData?.slug || "");
   const [formType, setFormType] = useState<FormType>(initialData?.form_type || "general");
   const [isOpen, setIsOpen] = useState(initialData?.is_open ?? true);
-  const [openDate, setOpenDate] = useState(initialData?.open_date ? new Date(initialData.open_date).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16));
-  const [closeDate, setCloseDate] = useState(initialData?.close_date ? new Date(initialData.close_date).toISOString().slice(0, 16) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16));
+  const [openDate, setOpenDate] = useState(() =>
+    initialData?.open_date
+      ? new Date(initialData.open_date).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16)
+  );
+  const [closeDate, setCloseDate] = useState(() =>
+    initialData?.close_date
+      ? new Date(initialData.close_date).toISOString().slice(0, 16)
+      : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+  );
   const [fields, setFields] = useState<FieldConfig[]>(initialData?.form_fields || []);
   const [settings, setSettings] = useState<FormSettings>(
     initialData?.settings || {
@@ -182,14 +188,16 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => { const val = e.target.value; setTitle(val); if (!initialData) setSlug(generateSlug(val)); };
 
   const handleAddField = (type: FieldType) => {
-    const newId = `field_${Date.now()}`;
+    // F2-6: crypto.randomUUID() bersifat murni (bukan impure seperti Date.now()),
+    // sehingga aman dipanggil menurut aturan purity React Compiler. ID tetap unik.
+    const newId = `field_${crypto.randomUUID()}`;
     const defaultLabel = FIELD_TYPES.find((t) => t.type === type)?.label || "Pertanyaan Baru";
     const newField: FieldConfig = { id: newId, type, label: defaultLabel, required: false, options: type === "dropdown" || type === "radio" || type === "checkbox" ? [{ label: "Opsi 1", value: "opsi_1" }, { label: "Opsi 2", value: "opsi_2" }] : undefined };
     setFields((prev) => [...prev, newField]);
   };
   const handleUpdateField = (index: number, updated: FieldConfig) => setFields((prev) => { const next = [...prev]; next[index] = updated; return next; });
   const handleRemoveField = (index: number) => setFields((prev) => prev.filter((_, i) => i !== index));
-  const handleDuplicateField = (index: number) => { const target = fields[index]; setFields((prev) => [...prev.slice(0, index + 1), { ...target, id: `field_${Date.now()}`, label: `${target.label} (Salinan)` }, ...prev.slice(index + 1)]); };
+  const handleDuplicateField = (index: number) => { const target = fields[index]; setFields((prev) => [...prev.slice(0, index + 1), { ...target, id: `field_${crypto.randomUUID()}`, label: `${target.label} (Salinan)` }, ...prev.slice(index + 1)]); };
   const handleDragEnd = (event: DragEndEvent) => { const { active, over } = event; if (over && active.id !== over.id) { setFields((items) => { const oldIndex = items.findIndex((i) => i.id === active.id); const newIndex = items.findIndex((i) => i.id === over.id); return arrayMove(items, oldIndex, newIndex); }); } };
 
   const handleSave = async (e: React.FormEvent) => {

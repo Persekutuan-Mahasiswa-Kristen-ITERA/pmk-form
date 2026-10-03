@@ -1,43 +1,27 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAllForms } from "@/lib/forms";
+import { computeFormStats } from "@/components/landing";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, Briefcase, FileText, PlusCircle, ArrowRight, Calendar, CheckCircle2, Sparkles, BarChart3, TrendingUp, ExternalLink } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Users, Briefcase, FileText, PlusCircle, ArrowRight, Calendar, BarChart3 } from "lucide-react";
 
 export const revalidate = 0;
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
+  // F2-1: data-access layer tunggal — pakai getAllForms() (sudah requireAdmin).
+  const { data: forms } = await getAllForms();
 
-  // Fetch forms stats
-  const { data: forms, error: formsError } = await supabase
-    .from("forms")
-    .select("id, is_open, close_date, form_type, title, created_at")
-    .order("created_at", { ascending: false });
-
-  if (formsError) {
-    console.error("Error fetching forms:", formsError);
-    // fallback empty
-    // We'll still render but with zeros
-  }
-
-  const now = new Date();
-  const totalForms = forms?.length || 0;
-  const openForms = forms?.filter(
-    f => f.is_open && new Date(f.close_date) > now
-  ).length || 0;
-  const upcomingForms = forms?.filter(
-    f => f.is_open && new Date(f.close_date) > now && 
-         (new Date(f.close_date).getTime() - now.getTime()) <= 7 * 24 * 60 * 60 * 1000
-  ).length || 0;
-  const closedForms = forms?.filter(
-    f => !f.is_open || new Date(f.close_date) <= now
-  ).length || 0;
+  // F2-4 + F2-5: statistik memakai computeFormStats (sumber: isFormActive),
+  // bukan new Date() yang tersebar di body komponen (aturan purity React).
+  const stats = computeFormStats(forms);
+  const totalForms = stats.total;
+  const openForms = stats.activeCount;
+  const upcomingForms = stats.closingSoon;
+  const closedForms = stats.closed;
 
   // Group by form_type for quick insight
   const typeCounts: Record<string, number> = {};
-  forms?.forEach(f => {
+  forms.forEach(f => {
     typeCounts[f.form_type] = (typeCounts[f.form_type] || 0) + 1;
   });
 
@@ -146,7 +130,7 @@ export default async function DashboardPage() {
           {/* We could show recent forms or recent submissions; for simplicity, show recent forms */}
           <div className="divide-y divide-border/50">
             {forms && forms.length > 0 ? (
-              forms.slice(0, 5).map((form, idx) => (
+              forms.slice(0, 5).map((form) => (
                 <div key={form.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 hover:bg-highlight/10 transition-colors">
                   <div>
                     <p className="font-semibold text-foreground text-lg">{form.title}</p>

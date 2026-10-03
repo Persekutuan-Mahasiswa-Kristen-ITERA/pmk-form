@@ -17,7 +17,7 @@ dan `git log` terlebih dulu saat melanjutkan sesi.
 | Fase 1 — keamanan (otorisasi) | ✅ SELESAI & LIVE | migration 002/002b/003/007 dijalankan; PR #3 di-merge; produksi redeploy |
 | Fase 1.5 — hardening | ✅ SELESAI & LIVE | rate limit, upload hardening, matriks otorisasi |
 | GATE 0 | ✅ **SELESAI** | semua 7 item verifikasi lulus |
-| Fase 2 — pembersihan redundansi | ⬜ BELUM MULAI | branch `chore/cleanup-redundancy` (dibuat setelah GATE 0) |
+| Fase 2 — pembersihan redundansi | 🔄 DALAM PROSES | branch `chore/cleanup-redundancy`; 8 poin selesai, menunggu checkpoint |
 | Fase 3 — enforce form config | ⬜ BELUM MULAI | |
 | Fase 4 — keputusan strategis | ⬜ BELUM MULAI | |
 | Fase 5 — OAuth Google + admin | ⬜ BELUM MULAI | |
@@ -140,6 +140,44 @@ bersama 002, sebelum deploy. Masalah ini lolos di Fase 0 karena `user_roles` mas
 7. **Fitur hapus form belum terwiring**: `deleteForm()` ada di `lib/forms.ts` baris 156 tapi **0 pemanggil** (tidak ada UI/server action). Form hanya bisa dihapus via SQL/Dashboard. Pertimbangkan di Fase 4: apakah perlu UI hapus form atau cukup `toggleFormOpen` (nonaktifkan).
 
 ---
+
+## FASE 2 — pembersihan redundansi (branch `chore/cleanup-redundancy`)
+
+Semua 8 poin dari `docs/prompts/MASTER.md` dikerjakan. Verifikasi: tsc 0 error,
+eslint **0 error / 0 warning** (dari 7 error / 14 warning), `next build` OK.
+
+1. **Data-access layer tunggal** — query inline diganti pemanggilan `lib/forms`:
+   - `app/page.tsx` → `getOpenForms()` + `countOpenForms()`
+   - `app/admin/(dashboard)/dashboard/page.tsx` → `getAllForms()`
+   - `app/actions/forms.ts` → `createForm()` / `updateForm()`
+   - `app/actions/deleteResponse.ts` → `deleteFormResponse()`
+   - `app/form/[slug]/success/page.tsx` & `formOptions.ts` tetap inline karena
+     butuh service role (submit anon / fetch opsi) — disengaja.
+   - Fungsi role/permission **TIDAK dihapus** (menunggu Fase 4A/5).
+2. **Orphan dihapus** (semua 0 pemanggil, diverifikasi grep):
+   - `uploadFile()` (bucket `recruitment-files`) di `app/actions/uploadFile.ts`
+   - `revalidateRecruitment()` + `revalidateAdminData()` di `app/actions/revalidate.ts`
+   - `components/QRCodeCard.tsx` (success page pakai `react-qr-code` langsung)
+   - dead branch `href = isRecruitment ? ... : ...` di `FormCard.tsx` (kedua
+     cabang identik → `const href = /form/${slug}`)
+3. **`toRendererConfig()`** — pemetaan tipe field dihapus sehingga email/tel/
+   url/number kembali memakai `<input type>` yang benar. **Normalisasi
+   string-option DIPERTAHANKAN** (data produksi: 12 field options `string[]`).
+   Renderer baca `helpText ?? helperText` (11 helper text produksi `helperText`).
+4. **Definisi tunggal "form aktif"** → `isFormActive()` di `lib/forms.ts`:
+   `is_open=true AND open_date<=now AND close_date>now`. Dipakai landing,
+   dashboard, `countOpenForms()`, `countActiveForms()`, `computeFormStats()`.
+5. **UI duplikat diekstrak**: `components/PMKLogo.tsx` (konstanta `PMK_LOGO_URL`,
+   dipakai 6 tempat), `components/landing.tsx` (`StatCard`, `FilterChip`,
+   `FORM_CATEGORIES`, `computeFormStats`). `next.config` remotePatterns tetap.
+6. **Lint bersih**: 3× `no-explicit-any` (hasil page: tipe `HasilResponse` +
+   `catch (err: unknown)`), 2× React purity (lazy `useState` + `crypto.randomUUID()`),
+   10 unused imports, `actionTypes` objek→union.
+7. **`getAdminUser()` dibungkus `cache()`** — request-scoped, default-deny tak
+   berubah; satu round-trip per request.
+8. **Upload hardening**: rate limit 5/menit/IP, nama file dibatasi 200 char.
+   Sisa risiko (MIME palsu, storage INSERT anon) butuh konfigurasi bucket,
+   ditunda ke Fase 7.
 
 ## SARAN (catatan, jangan dikerjakan sebelum disetujui)
 

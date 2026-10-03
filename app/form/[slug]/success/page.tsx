@@ -7,6 +7,7 @@ const GoldenParticles = dynamic(
 );
 import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
+import { PMK_LOGO_URL } from "@/components/PMKLogo";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -77,7 +78,7 @@ export default function GenericSuccessPage() {
       >
         <div className="bg-primary/10 p-4 rounded-full mb-6 border-2 border-accent/20 shadow-inner">
           <Image
-            src="https://res.cloudinary.com/dm3zixaz4/image/upload/v1772567328/PMK_LOGO-removebg-preview_oydcdq.avif"
+            src={PMK_LOGO_URL}
             alt="PMK ITERA Logo"
             width={100}
             height={100}

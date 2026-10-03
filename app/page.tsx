@@ -1,10 +1,10 @@
-import Image from "next/image";
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getOpenForms, countOpenForms } from "@/lib/forms";
 import { GoldenParticles } from "@/components/GoldenParticles";
 import { BibleVerseBanner } from "@/components/BibleVerseBanner";
 import { FormCard } from "@/components/FormCard";
 import { ClipboardList, Users, BarChart3, TrendingUp } from "lucide-react";
+import { PMKLogo } from "@/components/PMKLogo";
+import { FORM_CATEGORIES, StatCard, FilterChip, computeFormStats } from "@/components/landing";
 
 export const revalidate = 300; // Cache diperpanjang menjadi 5 menit untuk performa optimal
 
@@ -16,54 +16,31 @@ export default async function LandingPage({
   const resolvedParams = searchParams ? await searchParams : {};
   const selectedCategory = resolvedParams.category;
 
-  const supabase = await createClient();
-  const now = new Date().toISOString();
+  // F2-1: data-access layer tunggal. Query inline Supabase diganti dengan
+  // lib/forms.ts; filter "form aktif" memakai definisi tunggal isFormActive().
+  const allOpenForms = await getOpenForms();
+  const openForms = selectedCategory && selectedCategory !== "all"
+    ? allOpenForms.filter((f) => f.form_type === selectedCategory)
+    : allOpenForms;
 
-  // Optimasi Database Query: Filter langsung di Supabase alih-alih di JS
-  let query = supabase
-    .from("forms")
-    .select("id, slug, title, description, close_date, is_open, form_type")
-    .eq("is_open", true)
-    .gt("close_date", now)
-    .order("close_date", { ascending: true });
-
-  if (selectedCategory && selectedCategory !== "all") {
-    query = query.eq("form_type", selectedCategory);
-  }
-
-  const { data: openForms } = await query;
-
-  // Ambil total form aktif untuk statistik (query ringan)
-  const { count: totalForms } = await supabase
-    .from("forms")
-    .select("*", { count: "exact", head: true })
-    .eq("is_open", true)
-    .gt("close_date", now);
+  // Statistik: jumlah form aktif (satu definisi dengan isFormActive).
+  const totalForms = await countOpenForms();
 
   const totalCategories = openForms ? new Set(openForms.map(f => f.form_type)).size : 0;
-  
-  // Hitung yang segera tutup (< 7 hari)
-  const sevenDaysLater = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const upcomingDeadlines = openForms?.filter(f => f.close_date <= sevenDaysLater).length || 0;
+
+  // Form yang segera tutup (< 7 hari). Komputasi terkonsentrasi di
+  // computeFormStats (memakai isFormActive) — bukan Date.now() tersebar di
+  // body komponen (aturan purity React Compiler).
+  const upcomingDeadlines = computeFormStats(openForms).closingSoon;
 
   return (
     <main className="min-h-screen flex flex-col items-center pb-20 relative w-full overflow-x-hidden bg-[#FAF6F0]">
       <GoldenParticles />
       <BibleVerseBanner />
 
-      {/* Hero Section */}
+        {/* Hero Section */}
       <div className="w-full max-w-6xl px-4 sm:px-6 lg:px-8 flex flex-col items-center pt-10 sm:pt-16 mt-2">
-        <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 mb-5 sm:mb-6 rounded-full border-3 sm:border-4 border-accent shadow-xl bg-white flex items-center justify-center p-1.5 sm:p-2 z-10 overflow-hidden">
-          <Image
-            src="https://res.cloudinary.com/dm3zixaz4/image/upload/v1772567328/PMK_LOGO-removebg-preview_oydcdq.avif"
-            alt="PMK ITERA Logo"
-            width={120}
-            height={120}
-            className="object-contain"
-            priority
-            sizes="(max-width: 640px) 120px, (max-width: 768px) 140px, 160px"
-          />
-        </div>
+        <PMKLogo size={144} className="mb-5 sm:mb-6 border-3 sm:border-4" />
 
         <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-accent/15 border border-accent/30 text-primary text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-3 sm:mb-4">
           <ClipboardList className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Portal Form & Pelayanan
@@ -85,12 +62,18 @@ export default async function LandingPage({
 
         {/* Filter Bar Kategori Form */}
         <div className="w-full flex items-center justify-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 overflow-x-auto pb-2 px-2 -mx-2 scrollbar-hide">
-          <FilterChip label="Semua" href="/" active={!selectedCategory || selectedCategory === "all"} />
-          <FilterChip label="Recruitment" href="/?category=recruitment" active={selectedCategory === "recruitment"} />
-          <FilterChip label="Event" href="/?category=event" active={selectedCategory === "event"} />
-          <FilterChip label="Survei" href="/?category=survey" active={selectedCategory === "survey"} />
-          <FilterChip label="Presensi" href="/?category=presensi" active={selectedCategory === "presensi"} />
-          <FilterChip label="Umum" href="/?category=general" active={selectedCategory === "general"} />
+          {FORM_CATEGORIES.map((cat) => (
+            <FilterChip
+              key={cat.value}
+              label={cat.label}
+              href={cat.value === "all" ? "/" : `/?category=${cat.value}`}
+              active={
+                cat.value === "all"
+                  ? !selectedCategory || selectedCategory === "all"
+                  : selectedCategory === cat.value
+              }
+            />
+          ))}
         </div>
 
         {/* Grid Form */}
@@ -101,7 +84,7 @@ export default async function LandingPage({
                 key={form.id}
                 slug={form.slug}
                 title={form.title}
-                description={form.description}
+                description={form.description ?? ""}
                 closeDate={form.close_date}
                 formType={form.form_type}
               />
@@ -131,38 +114,5 @@ export default async function LandingPage({
         </p>
       </footer>
     </main>
-  );
-}
-
-function StatCard({ icon, value, label, color }: { icon: React.ReactNode; value: number; label: string; color: string }) {
-  const colorMap: Record<string, string> = {
-    primary: "bg-primary/10 text-primary border-primary/20",
-    accent: "bg-amber-100 text-amber-700 border-amber-200",
-    destructive: "bg-red-100 text-red-700 border-red-200",
-  };
-
-  return (
-    <div className={`rounded-2xl p-3 sm:p-4 text-center bg-white shadow-sm border ${colorMap[color] || colorMap.primary} transition-all hover:shadow-md`}>
-      <div className="flex items-center justify-center gap-2 mb-1.5">
-        {icon}
-      </div>
-      <div className="text-2xl sm:text-3xl font-serif font-bold text-foreground">{value}</div>
-      <div className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
-    </div>
-  );
-}
-
-function FilterChip({ label, href, active }: { label: string; href: string; active: boolean }) {
-  return (
-    <Link
-      href={href}
-      className={`px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-all shrink-0 border shadow-sm whitespace-nowrap ${
-        active
-          ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
-          : "bg-white text-foreground/70 border-border/50 hover:bg-secondary/50 hover:border-accent/30"
-      }`}
-    >
-      {label}
-    </Link>
   );
 }
