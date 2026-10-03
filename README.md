@@ -7,7 +7,7 @@ Sistem Manajemen Form Serbaguna untuk seluruh divisi & kepanitiaan **PMK ITERA**
 - **Form Builder Dinamis**: Drag-and-drop urutan pertanyaan dengan pilihan tipe field lengkap (Teks Pendek, Teks Panjang, Dropdown, Radio, Checkbox Group, Tanggal, dan Upload Lampiran).
 - **Public Renderer Generik**: Halaman pengisian form responsif di `/form/[slug]` dengan validasi Zod dinamis & upload file ke bucket Supabase.
 - **Manajemen Respons & Export**: Tabel viewer per-form, export data ke **CSV** (PapaParse), dan export seluruh lampiran ke **ZIP** (JSZip).
-- **Kompatibilitas Penuh**: Oprec yang sedang berjalan (`/recruitment/[slug]`) tetap berfungsi normal tanpa ada data yang hilang/terdampak.
+- **Kompatibilitas Penuh**: Data oprec lama (`submissions`, `selection_results`) tetap utuh dan terlayani cek-hasil. Route lama `/recruitment/[slug]` dan `/admin/recruitments` sudah tidak ada — renderer generik `/form/[slug]` adalah satu-satunya jalur publik.
 
 ---
 
@@ -47,7 +47,7 @@ Buka `http://localhost:3000` di browser.
 - `/admin/forms/new` — Builder untuk membuat form baru
 - `/admin/forms/[id]` — Builder untuk mengedit form
 - `/admin/forms/[id]/responses` — Viewer respons & export CSV/ZIP
-- `/admin/recruitments` — Access lawas oprec (backward-compatible)
+- `/hasil` — Cek hasil seleksi (arsip rekrutmen lama + form baru via `form_responses`)
 
 ---
 

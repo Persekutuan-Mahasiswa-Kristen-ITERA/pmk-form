@@ -219,6 +219,30 @@ tsc 0, eslint 0, build OK, 8 tes unit lolos.
 
 ---
 
+## FASE 4 — Keputusan Strategis (branch `chore/strategic-cleanup`, belum merge)
+
+Status: KODE + DOKS SELESAI & terverifikasi (tsc 0, eslint 0, build OK,
+8 tes unit lolos). Default MASTER diikuti semua (4A–4D).
+
+1. **4A Role**: klaim berjenjang diluruskan di README + DOKUMENTASI_PROYEK
+   (kode hanya cek keberadaan baris `user_roles`; `divisi_admin` tidak
+   dienforce; enforce berjenjang dijadwalkan Fase 5 allowlist). Fungsi role
+   tetap ada (dihapus setelah Fase 5 stabil, sesuai MASTER).
+2. **4B Cek-hasil**: dropdown `/hasil` dilabeli "(Arsip)" + komentar kode
+   menjelaskan arsip vs form baru. Logika tak diubah (Fase 3 sudah hubungkan
+   endpoint ke `form_responses`). Opsi (1) dijadwalkan Fase 7.
+3. **4C Hapus/toggle**: `deleteForm` (lib) kini MENOLAK form berisi respons
+   (hitung head-count dulu). Baru: `toggleFormOpenAction` +
+   `deleteFormAction` (server, requireAdmin, revalidate) dan komponen
+   `FormQuickActions` di kartu admin — toggle 1-klik + hapus kunci-ganda yang
+   terkunci (ikon gembok) bila ada respons.
+4. **4D Dokumentasi**: klaim route mati `/recruitment/[slug]` +
+   `/admin/recruitments` dihapus dari README + DOKUMENTASI_PROYEK;
+   `DEPLOYMENT.md` ditulis ulang (repo benar, 4 env wajib, urutan rollout,
+   verifikasi pasca-deploy, rollback kode + migration).
+
+---
+
 ## PRODUKSI (snapshot Fase 0, untuk konteks)
 
 - 7 forms (semua `form_type=recruitment`, `is_open=false`)
