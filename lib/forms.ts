@@ -1,12 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { getAdminUser, requireAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Form,
   FormResponse,
   FormResponseInput,
-  UserRoleRecord,
-  PermissionCheck,
   FormType,
   FieldConfig,
   FormSettings,
@@ -430,101 +428,12 @@ export async function deleteFormResponse(id: string): Promise<void> {
 // ==========================================
 // USER ROLES — service
 // ==========================================
-
-/** Get the role for the current authenticated user. Returns null if no role row. */
-export async function getCurrentUserRole(): Promise<UserRoleRecord | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("*")
-    .eq("user_id", user.id)
-    .single();
-
-  if (error) return null; // no role row = not yet assigned
-  return data as UserRoleRecord;
-}
+// Fase 5: service layer role legacy dihapus. Sumber kebenaran otorisasi
+// sekarang admin_members (migration 009); manajemen admin ada di
+// app/actions/adminMembers.ts + halaman /admin/users.
 
 /**
- * Derive permissions for the current request.
- *
- * DEFAULT-DENY: an authenticated user with no `user_roles` row gets no
- * permissions. The old implementation fell back to super_admin for any
- * authenticated user, which is unsafe now that public signups are enabled.
- *
- * Per-division scoping (divisi_admin) is deferred to Fase 4; today every
- * role row grants full admin permissions.
- */
-export async function getCurrentUserPermissions(): Promise<PermissionCheck> {
-  const admin = await getAdminUser();
-
-  if (!admin) {
-    return {
-      canViewForms: false,
-      canCreateForms: false,
-      canEditForm: false,
-      canDeleteForm: false,
-      canViewResponses: false,
-      canDeleteResponses: false,
-      canExportResponses: false,
-    };
-  }
-
-  return {
-    canViewForms: true,
-    canCreateForms: true,
-    canEditForm: true,
-    canDeleteForm: true,
-    canViewResponses: true,
-    canDeleteResponses: true,
-    canExportResponses: true,
-    division: admin.division,
-  };
-}
-
-/** List all user roles (super_admin only). */
-export async function getAllUserRoles(): Promise<UserRoleRecord[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) throw new Error(`Gagal memuat daftar role: ${error.message}`);
-  return (data ?? []) as UserRoleRecord[];
-}
-
-/** Upsert a role for a user (super_admin only). */
-export async function upsertUserRole(
-  userId: string,
-  role: UserRoleRecord["role"],
-  division?: string
-): Promise<void> {
-  const supabase = await createClient();
-  const { error } = await supabase.from("user_roles").upsert(
-    { user_id: userId, role, division: division ?? null },
-    { onConflict: "user_id" }
-  );
-  if (error) throw new Error(`Gagal menyimpan role: ${error.message}`);
-}
-
-/** Remove a role row (super_admin only). */
-export async function removeUserRole(userId: string): Promise<void> {
-    const supabase = await createClient();
-    const { error } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId);
-    if (error) throw new Error(`Gagal menghapus role: ${error.message}`);
-}
-
-/**
-  * Normalisasi NIM (Fase 3-5).
+ * Normalisasi NIM (Fase 3-5).
   *
   * Normalisasi yang sama dipakai saat (a) mengecek duplikat aplikasi dan
   * (b) mengisi kolom `nim_normalized` untuk unique PARTIAL index (migration

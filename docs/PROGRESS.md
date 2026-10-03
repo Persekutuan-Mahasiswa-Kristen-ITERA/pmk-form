@@ -243,6 +243,75 @@ Status: KODE + DOKS SELESAI & terverifikasi (tsc 0, eslint 0, build OK,
 
 ---
 
+## FASE 5 — OAuth Google + Manajemen Admin (branch `feat/admin-oauth`, BELUM merge)
+
+Status: KODE SELESAI & terverifikasi (tsc 0, eslint 0, build OK, 14 tes unit
+lolos, migration 009 lolos validasi Postgres 17 container). Migration 009
+BELUM dijalankan di produksi.
+
+### CHECKPOINT 5.0 — Keputusan (sudah dijawab user)
+- #5: **Google saja**; email/password dipertahankan SELAMA TRANSISI, dihapus
+  setelah terverifikasi. User akan membuat akun Google per departemen.
+- #6: **bebas**, tanpa batasan domain, kontrol via allowlist default-deny.
+- #7: **satu level admin** (Fase 4A); semua admin = super_admin.
+- #8: **Vercel**.
+
+### Audit policy permisif (Tambahan #1, sebelum signup dinyalakan)
+- grep `using (true)`/`with check (true)` di semua migration: hanya ada di
+  migration 001 (sudah diganti 003) dan blok ROLLBACK 007 (komentar, tidak
+  dijalankan). TIDAK ada policy permisif live untuk `authenticated`.
+- Verifikasi live via API: anon SELECT forms=1 (form aktif `asdc`, expected),
+  form_responses/user_roles/submissions/selection_results/recruitments = 0.
+- Storage `form-attachments`: SELECT anon dibuka sengaja (lampiran publik);
+  DELETE/UPDATE hanya `is_admin()`.
+- TEMUAN BARU: ada form ke-8 `asdc` (is_open=true, 1 field Email, 1 respons)
+  di produksi — form uji yang terlupa ditutup. Dilaporkan, TIDAK dihapus.
+
+### Migration 009 (`migrations/009_admin_members_allowlist.sql`)
+- Tabel `admin_members` (email lowercase unique, role, status
+  invited|active|disabled, user_id nullable, invited_by, timestamps) +
+  `admin_audit_log` (append-only: hanya policy INSERT+SELECT, tidak ada
+  UPDATE/DELETE).
+- `is_admin()` membaca `admin_members` (status active); SECURITY DEFINER +
+  search_path public + REVOKE public/anon + GRANT authenticated dipertahankan.
+- `link_admin_user_id()`: fungsi SECURITY DEFINER TANPA PARAMETER; email dari
+  `auth.users` by `auth.uid()`, wajib `email_confirmed_at NOT NULL`, hanya
+  user_id NULL atau pemilik baris, disabled tidak bisa reaktivasi.
+- Seed otomatis dari `user_roles` join `auth.users` (tidak perlu input manual);
+  RAISE EXCEPTION bila 0 admin aktif (anti-lockout). Satu transaksi.
+- `user_roles` TIDAK di-drop.
+- VALIDASI (Postgres 17 container isolated): happy path `SEED ADMIN OK: 1
+  admin aktif` + COMMIT; guard menolak saat 0 admin; link skenario A-E lolos
+  (invited->active, anti-rebut, constraint lowercase, disabled tetap).
+
+### Kode
+- `lib/auth.ts`: `getAdminUser` baca `admin_members` (status active double-
+  check); baru `requireSuperAdmin()`. Dihapus: 5 fungsi legacy `user_roles`
+  (getCurrentUserRole, getCurrentUserPermissions, getAllUserRoles,
+  upsertUserRole, removeUserRole) — semua 0 pemanggil.
+- `app/auth/callback/route.ts`: exchangeCodeForSession + RPC
+  `link_admin_user_id` + `sanitizeNextPath` (anti open redirect).
+- `app/actions/adminMembers.ts`: listAdminMembers, inviteAdminAction,
+  updateAdminRoleAction, setAdminStatusAction, deleteAdminAction. Semua
+  `requireSuperAdmin()`; guard self-delete, self-disable, last-super_admin;
+  audit log di setiap aksi.
+- `app/admin/(dashboard)/users/page.tsx` + `components/AdminUsersClient.tsx`:
+  halaman manajemen admin (invite, aktifkan/nonaktifkan, hapus, konfirmasi).
+- `components/GoogleLoginButton.tsx`: OAuth PKCE -> /auth/callback.
+- `app/admin/login/page.tsx`: tombol Google + email/password (transisi),
+  pesan error aman (tidak bocor apakah email terdaftar).
+- Layout admin: nav "Admin" hanya untuk super_admin.
+- Tes: 14 total (6 baru: sanitizeNextPath 5 skenario + normalisasi email).
+
+### Rollout (URUTAN WAJIB, lihat CHECKPOINT 5.6)
+1. Backup DB.
+2. Migration 009 DULU, baru deploy kode (Tambahan #3).
+3. Nyalakan signup + matikan email provider (Tambahan #1) + setup Google OAuth
+   di Supabase (panduan lengkap di checkpoint 5.6).
+4. Verifikasi, lalu hapus email/password.
+
+---
+
 ## PRODUKSI (snapshot Fase 0, untuk konteks)
 
 - 7 forms (semua `form_type=recruitment`, `is_open=false`)

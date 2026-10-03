@@ -10,6 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
+import { GoogleLoginButton } from "@/components/GoogleLoginButton";
+
+// Pesan error aman: tidak membocorkan apakah email terdaftar di allowlist
+// (keputusan 5.3). Hanya beri tahu bahwa kredensial tidak valid.
+const SAFE_LOGIN_ERROR = "Email atau password salah.";
+const OAUTH_ERRORS: Record<string, string> = {
+  oauth_cancelled: "Login Google dibatalkan.",
+  oauth_failed: "Login Google gagal. Coba lagi, atau gunakan email & password.",
+  invalid_request: "Permintaan login tidak valid.",
+};
 
 export default function AdminLogin() {
     const [email, setEmail] = useState("");
@@ -18,6 +28,13 @@ export default function AdminLogin() {
     const [errorMsg, setErrorMsg] = useState("");
     const router = useRouter();
     const supabase = createClient();
+
+    // Tampilkan pesan error dari parameter ?error (dari callback OAuth).
+    useState(() => {
+      if (typeof window === "undefined") return;
+      const code = new URLSearchParams(window.location.search).get("error");
+      if (code && OAUTH_ERRORS[code]) setErrorMsg(OAUTH_ERRORS[code]);
+    });
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -30,7 +47,7 @@ export default function AdminLogin() {
         });
 
         if (error) {
-            setErrorMsg(error.message);
+            setErrorMsg(SAFE_LOGIN_ERROR);
             setLoading(false);
         } else {
             router.push("/admin/dashboard");
@@ -56,7 +73,18 @@ export default function AdminLogin() {
                         Silakan masuk untuk mengelola Open Recruitment
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                    <GoogleLoginButton />
+
+                    <div className="relative py-1">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-border/60" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-white px-2 text-muted-foreground">atau</span>
+                      </div>
+                    </div>
+
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div className="space-y-2">
                             <Label htmlFor="email" className="font-semibold">Email</Label>
