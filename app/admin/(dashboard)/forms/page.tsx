@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { Plus, FileText, Users, Eye, Edit, Trash2, ExternalLink, Calendar, Filter } from "lucide-react";
+import { Plus, FileText, Users, Eye, Edit, Calendar, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

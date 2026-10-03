@@ -14,39 +14,36 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import type { Form as GenericForm, FieldConfig } from "@/types/forms";
+import { PMK_LOGO_URL } from "@/components/PMKLogo";
+import type { Form as GenericForm, FieldConfig, FieldOption } from "@/types/forms";
 
 // Normalize generic FieldConfig -> renderer FieldConfig
 function toRendererConfig(f: FieldConfig): import("./FormFieldRenderer").FieldConfig {
-  const typeMap: Record<string, import("./FormFieldRenderer").FieldConfig["type"]> = {
-    text: "short_text",
-    short_text: "short_text",
-    long_text: "long_text",
-    number: "short_text",
-    email: "short_text",
-    phone: "short_text",
-    url: "short_text",
-    address: "long_text",
-    dropdown: "dropdown",
-    radio: "radio",
-    checkbox: "checkbox",
-    date: "date",
-    datetime: "date",
-    file_upload: "file_upload",
-  };
-
+  // F2-3: pemetaan tipe field (email/phone/url/number -> short_text dst.) DIHAPUS.
+  // Sebelumnya semua tipe "bernilai" di-collapse ke short_text sehingga
+  // <input type> selalu "text" (email/tel/url/number tidak terpakai). Karena
+  // FormFieldRenderer sudah punya case untuk email/phone/url/number, tipe
+  // diteruskan apa adanya agar <input type> benar.
+  //
+  // Normalisasi string-option DIPERTAHANKAN: data produksi (7 form, 12 field)
+  // menyimpan options sebagai string[], sedangkan renderer butu {label,value}.
   const options = f.options
-    ? f.options.map((o: any) => (typeof o === "string" ? { label: o, value: o.toLowerCase().replace(/[^a-z0-9]/g, "_") } : o))
+    ? f.options.map((o: string | FieldOption) =>
+        typeof o === "string"
+          ? { label: o, value: o.toLowerCase().replace(/[^a-z0-9]/g, "_") }
+          : o
+      )
     : undefined;
 
   return {
     id: f.id,
-    type: (typeMap[f.type] ?? "short_text") as import("./FormFieldRenderer").FieldConfig["type"],
+    type: f.type as import("./FormFieldRenderer").FieldConfig["type"],
     label: f.label,
     placeholder: f.placeholder,
     required: f.required ?? false,
     options,
-    helperText: f.helpText,
+    // 11 helper text produksi memakai `helperText`; baca keduanya.
+    helpText: f.helpText ?? f.helperText,
   };
 }
 
@@ -165,7 +162,7 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
           <div className="w-full flex items-center justify-center">
             <div className="relative w-32 h-32 md:w-40 md:h-40 mb-2 rounded-full border-4 border-accent shadow-lg bg-white flex items-center justify-center p-2 z-10 overflow-hidden">
               <Image
-                src="https://res.cloudinary.com/dm3zixaz4/image/upload/v1772567328/PMK_LOGO-removebg-preview_oydcdq.avif"
+                src={PMK_LOGO_URL}
                 alt="PMK ITERA Logo"
                 width={150}
                 height={150}

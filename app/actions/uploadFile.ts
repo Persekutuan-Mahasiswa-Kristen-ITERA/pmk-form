@@ -1,8 +1,17 @@
 "use server";
 
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+// F2-8: batas panjang nama file (sebelumnya tidak dibatasi). Path Storage
+// maksimal 1024 char; 200 char cukup longgar dan aman.
+const MAX_FILE_NAME_LENGTH = 200;
+// F2-8: rate limit upload untuk menghambat pengisian bucket (kuota abuse).
+// Lebih ketat dari submit (5/menit/IP) karena 1 file = 1 object Storage.
+const UPLOAD_RATE_LIMIT = 5;
+const UPLOAD_RATE_WINDOW_MS = 60_000;
 const ALLOWED_FILE_TYPES = new Set([
   "application/pdf",
   "image/jpeg",
@@ -30,6 +39,17 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 export async function uploadFormAttachment(formData: FormData) {
   try {
+    // F2-8: rate limit per IP sebelum memproses apapun (menghambat spam upload
+    // yang mengisi kuota bucket). Lihat catatan di lib/rate-limit: in-memory
+    // limiter tidak andal lintas instance serverless; ini lapisan pertama.
+    const ip = getClientIp(await headers());
+    if (rateLimit(`upload:${ip}`, UPLOAD_RATE_LIMIT, UPLOAD_RATE_WINDOW_MS)) {
+      return {
+        success: false as const,
+        error: "Terlalu banyak upload. Silakan tunggu beberapa saat.",
+      };
+    }
+
     const file = formData.get("file");
     const formId = formData.get("formId");
     const respondentKey = formData.get("respondentKey") || "anonymous";
@@ -62,7 +82,10 @@ export async function uploadFormAttachment(formData: FormData) {
     const safeRespondentKey = String(respondentKey)
       .replace(/[^a-zA-Z0-9_-]/g, "_")
       .slice(0, 80) || "anonymous";
-    const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+    // F2-8: nama file dibatasi 200 char (sebelumnya tak terbatas).
+    const safeFileName = file.name
+      .replace(/[^a-zA-Z0-9.-]/g, "_")
+      .slice(0, MAX_FILE_NAME_LENGTH);
     const objectPath = `${formId}/${safeRespondentKey}/${Date.now()}-${safeFileName}`;
 
     const supabase = await createClient();
@@ -82,48 +105,6 @@ export async function uploadFormAttachment(formData: FormData) {
     return { success: true as const, url: data.publicUrl, path: objectPath };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gagal mengunggah lampiran.";
-    return { success: false as const, error: message };
-  }
-}
-
-/**
- * Compatibility action for the active recruitment flow.
- *
- * Keep this untouched semantically until Phase 5 switches the public renderer
- * to forms/form_responses. Existing open recruitments therefore keep uploading
- * to their current bucket and cannot be disrupted by the platform migration.
- */
-export async function uploadFile(formData: FormData) {
-  try {
-    const file = formData.get("file");
-    const recruitmentId = formData.get("recruitmentId");
-    const applicantNim = formData.get("applicantNim");
-
-    if (!(file instanceof File) || typeof recruitmentId !== "string" || typeof applicantNim !== "string" || !recruitmentId || !applicantNim) {
-      throw new Error("Data tidak lengkap untuk upload file.");
-    }
-
-    if (file.type !== "application/pdf") {
-      throw new Error("Invalid file type. Only PDF files are allowed.");
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      throw new Error("File too large. Maximum size is 5 MB.");
-    }
-
-    const supabase = await createClient();
-    const fileName = `${recruitmentId}/${applicantNim}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-    const { error } = await supabase.storage.from("recruitment-files").upload(fileName, file);
-
-    if (error) {
-      console.error("Recruitment file upload error", error);
-      throw new Error(`Gagal mengupload file: ${error.message}`);
-    }
-
-    const { data } = supabase.storage.from("recruitment-files").getPublicUrl(fileName);
-    return { success: true as const, url: data.publicUrl };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Gagal mengupload file.";
     return { success: false as const, error: message };
   }
 }

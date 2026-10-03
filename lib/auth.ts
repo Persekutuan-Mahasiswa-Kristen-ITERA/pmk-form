@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -29,15 +30,17 @@ export interface AdminUser {
  * has no `user_roles` row. Callers that must distinguish those two cases can
  * check the raw session first.
  *
- * FASE 2 (catatan): pembungkusan dengan React `cache()` direncanakan agar
- * beberapa panggilan `requireAdmin()` / `getAdminUser()` dalam satu request
- * (satu render server component + server action) hanya melakukan SATU round-trip
- * ke Supabase. Saat ini setiap pemanggilan mengulang query user_roles. Tunggu
- * Fase 2 karena perlu verifikasi `cache()` aman dipakai lintas server action
- * (request scope, bukan module scope) dan tidak menyebarkan identitas antar
- * request yang berbeda.
+ * FASE 2: dibungkus React `cache()`. Di App Router `cache()` bersifat
+ * REQUEST-SCOPED (tidak module-scoped), jadi hasilnya hanya di-share di dalam
+ * satu request yang sama dan TIDAK menyebarkan identitas antar request yang
+ * berbeda. Efeknya: beberapa panggilan `requireAdmin()` dalam satu request
+ * (render server component + server action, mis. layout admin + halaman)
+ * hanya melakukan SATU round-trip `auth.getUser()` + query `user_roles`.
+ *
+ * Semantik default-deny TIDAK berubah: `cache()` hanya mengingat Hasil
+ * (termasuk `null`), jadi user tanpa role row tetap ditolak di setiap cek.
  */
-export async function getAdminUser(): Promise<AdminUser | null> {
+export const getAdminUser = cache(async (): Promise<AdminUser | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -60,7 +63,7 @@ export async function getAdminUser(): Promise<AdminUser | null> {
     role: roleRecord.role,
     division: roleRecord.division,
   };
-}
+});
 
 /**
  * Require an admin session for a server action / route handler.

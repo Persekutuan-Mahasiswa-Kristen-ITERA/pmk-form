@@ -3,8 +3,9 @@
 Sumber kebenaran untuk status pekerjaan. Baca file ini, `docs/AUTHORIZATION_MATRIX.md`,
 dan `git log` terlebih dulu saat melanjutkan sesi.
 
-**Branch saat ini:** `chore/cleanup-and-hardening` (Fase 1; 16 commit, sudah di-push, **PR #3 terbuka, checks passing**)
-**Diperbarui:** setelah GATE 0 — migration 002+002b SUDAH dijalankan & terverifikasi di produksi
+**Branch saat ini:** `chore/cleanup-and-hardening` — ✅ **DI-MERGE KE MAIN** (PR #3, 2026-10-03)
+**Status:** GATE 0 SELESAI. Fase 1 + 1.5 sudah live di produksi.
+**Diperbarui:** setelah GATE 0 lengkap — semua verifikasi lulus
 
 ---
 
@@ -13,10 +14,10 @@ dan `git log` terlebih dulu saat melanjutkan sesi.
 | Fase | Status | Keterangan |
 |---|---|---|
 | Fase 0 — verifikasi & baseline | ✅ SELESAI | tsc/eslint/build, audit RLS, snapshot data produksi |
-| Fase 1 — keamanan (otorisasi) | ⏸ KODE SELESAI, ROLLOUT MENUNGGU KONFIRMASI | migration ditulis, **belum dijalankan** |
-| Fase 1.5 — hardening | ✅ KODE SELESAI | rate limit, upload hardening, matriks otorisasi |
-| GATE 0 | 🔄 DALAM PROSES | 002+002b ✅ ; backup DB ⏭ SKIP (ganti snapshot policy); sisanya menunggu |
-| Fase 2 — pembersihan redundansi | ⬜ BELUM MULAI | branch `chore/cleanup-redundancy` (dibuat setelah GATE 0) |
+| Fase 1 — keamanan (otorisasi) | ✅ SELESAI & LIVE | migration 002/002b/003/007 dijalankan; PR #3 di-merge; produksi redeploy |
+| Fase 1.5 — hardening | ✅ SELESAI & LIVE | rate limit, upload hardening, matriks otorisasi |
+| GATE 0 | ✅ **SELESAI** | semua 7 item verifikasi lulus |
+| Fase 2 — pembersihan redundansi | 🔄 DALAM PROSES | branch `chore/cleanup-redundancy`; 8 poin selesai, menunggu checkpoint |
 | Fase 3 — enforce form config | ⬜ BELUM MULAI | |
 | Fase 4 — keputusan strategis | ⬜ BELUM MULAI | |
 | Fase 5 — OAuth Google + admin | ⬜ BELUM MULAI | |
@@ -53,7 +54,7 @@ dan `git log` terlebih dulu saat melanjutkan sesi.
 
 ---
 
-## MIGRATION STATUS (semua ditulis, SEMUA belum dijalankan)
+## MIGRATION STATUS (semua dijalankan kecuali 006 yang masih usulan)
 
 | File | Status | Kapan dijalankan (rencana) |
 |---|---|---|
@@ -61,7 +62,7 @@ dan `git log` terlebih dulu saat melanjutkan sesi.
 | `002b` perbaiki recursion policy `user_roles` | ✅ **SUDAH DIJALANKAN** | Selesai GATE 0 (bersama 002) |
 | `003` perketat RLS + tutup anon INSERT | ✅ **SUDAH DIJALANKAN & TERVERIFIKASI** | Selesai GATE 0 (bersama 007) |
 | `004` (penanda; isinya di 003 bagian 2b) | — | Jangan dijalankan sendiri |
-| `005` limit bucket storage | ⬜ belum dijalankan | Rollout langkah 10 (kapan saja, aman) |
+| `005` limit bucket storage | ✅ **SUDAH DIJALANKAN** | Selesai GATE 0 (verifikasi via SQL Editor, lihat di bawah) |
 | `006` USULAN `nim_normalized` | ⬜ usulan Fase 2/3 | Jangan dijalankan sekarang |
 | `007` tabel legacy → admin only | ✅ **SUDAH DIJALANKAN & TERVERIFIKASI** | Selesai GATE 0 (bersama 003) |
 
@@ -92,54 +93,40 @@ bersama 002, sebelum deploy. Masalah ini lolos di Fase 0 karena `user_roles` mas
 
 ## LANGKAH MANUAL YANG MENUNGGU
 
-- [x] Backup database produksi → **SKIP** (pg_dump & backup otomatis tidak bisa
-      dipakai; diganti `docs/LEGACY_POLICY_SNAPSHOT.md` yang mencakup persis
-      policy yang diubah 007. Data sendiri tidak dihapus oleh 007.)
-- [x] Matikan signup publik — **KONFIRMASI DULU**: apakah sudah dimatikan sebelum
-      deploy? (Belum dikonfirmasi user.)
-- [x] Jalankan migration 002 + 002b — ✅ SELESAI & TERVERIFIKASI
-      (seed `biroitpmkitera@gmail.com` = super_admin; `is_admin()` ada)
-- [ ] Push branch & buat PR — ✅ SELESAI (PR #3, checks passing)
-- [ ] **Cek env Vercel: `SUPABASE_SERVICE_ROLE_KEY` sudah ada?**
-- [ ] Deploy (Vercel auto-build dari PR #3) → verifikasi admin masuk + user 403
-      ✅ ADMIN LOGIN TERVERIFIKASI (`biroitpmkitera@gmail.com` bisa masuk dashboard
-      → bukti 002b bekerja, TIDAK ADA error 42P17 di produksi).
-      ⏭ TES 403 USER BIASA DI-SKIP (Opsi B) — signup publik sudah dimatikan
-      (disable_signup=true) dan app tidak punya halaman signup, jadi hanya ada
-      1 user (admin). Bukti tidak-ada-42P17 sudah cukup. Akan divalidasi lagi
-      pasca-OAuth Google (Fase 5) saat ada user non-admin sungguhan.
-- [ ] Buat form tes, uji submit E2E, tutup form tes
-      ✅ SELESAI: submit E2E BERHASIL di preview PR #3 (respons
-      'Febrian Yoel Anggara Saputra' masuk ke form_responses).
-      ⚠️ Ternyata tes pertama dijalankan di deployment PRODUKSI (main) dan gagal
-      — itu justru bukti migration 003 bekerja (anon INSERT ditolak 42501)
-      karena main belum berisi server action. Kode submit baru hanya ada di
-      branch, sehingga PR #3 WAJIB di-merge untuk mengembalikan kemampuan
-      submit di produksi.
-      🧹 SISA: 1 baris 'Test Debug' (sisipan debug) + respons E2E + form tes
-      'FORM UJI E2E' perlu dihapus via dashboard admin. deleteForm akan
-      cascade ke form_responses (FK on delete cascade), sehingga SEMUA respons
-      tes ikut terhapus sekaligus.
-      Catatan: error 400 saat saya mencoba menutup form via REST adalah salah
-      teknik saya sendiri (POST diterjemahkan PostgREST sebagai INSERT),
-      BUKAN bug di app — toggle/delete di dashboard memakai PATCH/DELETE
-      via supabase-js dan berfungsi normal.
-- [ ] Jalankan migration 003 + 007; verifikasi V1-V4
-      ✅ SELESAI & TERVERIFIKASI melalui API (anon vs service role):
-         - form_responses: 240 (service) vs 0 (anon) - data aman, anon diblokir
-         - forms: 7 vs 0 | selection_results: 54 vs 0 | submissions: 239 vs 0
-         - recruitments: 7 vs 0 (policy 'Public can view open recruitments' hilang)
-         - user_roles: 1 vs 0
-         - V3: anon INSERT form_responses -> HTTP 401 `42501 new row violates
-           row-level security policy` ✅
-- [ ] Jalankan migration 005
-- [ ] Merge PR #3 ke main
+- [x] Backup database produksi → SKIP (ganti snapshot policy; data 100% utuh)
+- [x] Matikan signup publik → sudah aktif (disable_signup=true, verifikasi API)
+- [x] Migration 002 + 002b → ✅ terverifikasi (seed super_admin)
+- [x] Push branch & PR #3 → ✅ MERGED 2026-10-03
+- [x] Env Vercel `SUPABASE_SERVICE_ROLE_KEY` → ✅ ada (submit E2E berhasil)
+- [x] Deploy + verifikasi admin login → ✅
+- [x] Migration 003 + 007; V1–V3 → ✅ terverifikasi via API
+- [x] Submit E2E (V4) di preview → ✅ berhasil (respons masuk)
+- [x] Hapus form tes → ✅ `delete from forms where title='FORM UJI E2E'`
+      (cascade otomatis hapus 3 respons tes; data kembali: 7 forms /
+      240 form_responses / 54 selection_results / 239 submissions)
+- [x] Migration 005 → ✅ dijalankan (verifikasi via SQL Editor)
+- [x] Merge PR #3 ke main → ✅ produksi redeploy `deb6ef97`
+
+## VERIFIKASI POST-GATE-0 (semua lulus)
+
+- form_responses: 240 (service) vs 0 (anon) — data aman, anon diblokir
+- forms: 7 vs 0 | selection_results: 54 vs 0 | submissions: 239 vs 0
+- recruitments: 7 vs 0 (policy 'Public can view open recruitments' hilang)
+- user_roles: 1 vs 0
+- anon INSERT form_responses → HTTP 401 `42501` (V3)
+- submit E2E di preview PR #3 → redirect `/success`, respons tersimpan (V4)
+- login admin `biroitpmkitera@gmail.com` → masuk dashboard (002b bekerja,
+  TIDAK ada error 42P17)
+- migration 005: cek via SQL Editor —
+  `select id, file_size_limit, allowed_mime_types from storage.buckets
+  where id='form-attachments';` (REST tidak bisa: schema `storage` tidak
+  ter-ekspos, hanya `public` + `graphql_public`)
 
 ---
 
 ## ISU TERBUKA
 
-1. **Tidak ada form `is_open` di produksi** → uji submit E2E butuh form tes sementara (rollout langkah 6).
+1. **Tidak ada form `is_open` di produksi** (snapshot Fase 0) → sudah teratasi: form tes sementara dibuat untuk V4, lalu dihapus setelah submit E2E lulus.
 2. **7 error lint** pre-existing (`no-explicit-any` ×3, React Compiler `Date.now()` ×3, +1) — ditunda ke Fase 2.
 3. **Storage INSERT anon masih terbuka** di bucket `form-attachments` (diperlukan upload publik).
    Mitigasi: migration 005 (limit ukuran + MIME). Sisa risiko: kuota abuse, belum ada rate limit upload,
@@ -150,8 +137,47 @@ bersama 002, sebelum deploy. Masalah ini lolos di Fase 0 karena `user_roles` mas
    sehingga rollback 007 kini LENGKAP memulihkan policy asli — tidak butuh backup DB.
 5. **`getAdminUser()`/`requireAdmin()` belum dibungkus React `cache()`** — dijadwalkan Fase 2 langkah 7.
 6. **Email admin seed**: `biroitpmkitera@gmail.com` (migration 002, RAISE EXCEPTION jika tak ditemukan).
+7. **Fitur hapus form belum terwiring**: `deleteForm()` ada di `lib/forms.ts` baris 156 tapi **0 pemanggil** (tidak ada UI/server action). Form hanya bisa dihapus via SQL/Dashboard. Pertimbangkan di Fase 4: apakah perlu UI hapus form atau cukup `toggleFormOpen` (nonaktifkan).
 
 ---
+
+## FASE 2 — pembersihan redundansi (branch `chore/cleanup-redundancy`)
+
+Semua 8 poin dari `docs/prompts/MASTER.md` dikerjakan. Verifikasi: tsc 0 error,
+eslint **0 error / 0 warning** (dari 7 error / 14 warning), `next build` OK.
+
+1. **Data-access layer tunggal** — query inline diganti pemanggilan `lib/forms`:
+   - `app/page.tsx` → `getOpenForms()` + `countOpenForms()`
+   - `app/admin/(dashboard)/dashboard/page.tsx` → `getAllForms()`
+   - `app/actions/forms.ts` → `createForm()` / `updateForm()`
+   - `app/actions/deleteResponse.ts` → `deleteFormResponse()`
+   - `app/form/[slug]/success/page.tsx` & `formOptions.ts` tetap inline karena
+     butuh service role (submit anon / fetch opsi) — disengaja.
+   - Fungsi role/permission **TIDAK dihapus** (menunggu Fase 4A/5).
+2. **Orphan dihapus** (semua 0 pemanggil, diverifikasi grep):
+   - `uploadFile()` (bucket `recruitment-files`) di `app/actions/uploadFile.ts`
+   - `revalidateRecruitment()` + `revalidateAdminData()` di `app/actions/revalidate.ts`
+   - `components/QRCodeCard.tsx` (success page pakai `react-qr-code` langsung)
+   - dead branch `href = isRecruitment ? ... : ...` di `FormCard.tsx` (kedua
+     cabang identik → `const href = /form/${slug}`)
+3. **`toRendererConfig()`** — pemetaan tipe field dihapus sehingga email/tel/
+   url/number kembali memakai `<input type>` yang benar. **Normalisasi
+   string-option DIPERTAHANKAN** (data produksi: 12 field options `string[]`).
+   Renderer baca `helpText ?? helperText` (11 helper text produksi `helperText`).
+4. **Definisi tunggal "form aktif"** → `isFormActive()` di `lib/forms.ts`:
+   `is_open=true AND open_date<=now AND close_date>now`. Dipakai landing,
+   dashboard, `countOpenForms()`, `countActiveForms()`, `computeFormStats()`.
+5. **UI duplikat diekstrak**: `components/PMKLogo.tsx` (konstanta `PMK_LOGO_URL`,
+   dipakai 6 tempat), `components/landing.tsx` (`StatCard`, `FilterChip`,
+   `FORM_CATEGORIES`, `computeFormStats`). `next.config` remotePatterns tetap.
+6. **Lint bersih**: 3× `no-explicit-any` (hasil page: tipe `HasilResponse` +
+   `catch (err: unknown)`), 2× React purity (lazy `useState` + `crypto.randomUUID()`),
+   10 unused imports, `actionTypes` objek→union.
+7. **`getAdminUser()` dibungkus `cache()`** — request-scoped, default-deny tak
+   berubah; satu round-trip per request.
+8. **Upload hardening**: rate limit 5/menit/IP, nama file dibatasi 200 char.
+   Sisa risiko (MIME palsu, storage INSERT anon) butuh konfigurasi bucket,
+   ditunda ke Fase 7.
 
 ## SARAN (catatan, jangan dikerjakan sebelum disetujui)
 

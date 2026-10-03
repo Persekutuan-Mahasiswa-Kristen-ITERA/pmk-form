@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { PMK_LOGO_URL } from "@/components/PMKLogo";
 import Link from "next/link";
 import { getRecruitmentFormOptions } from "@/app/actions/formOptions";
 import { GoldenParticles } from "@/components/GoldenParticles";
@@ -18,13 +19,26 @@ type FormOption = {
   title: string;
 };
 
+/** Bentuk response /api/cek-hasil (F2-6: menggantikan `any`). */
+type HasilResponse = {
+  status: "ACCEPTED" | "NOT_ACCEPTED" | "NOT_REGISTERED";
+  nama?: string;
+  message?: string;
+  placements?: {
+    departemen: string;
+    divisi: string;
+    prodi: string | null;
+    wa_group_link: string | null;
+  }[];
+};
+
 export default function HasilSeleksiPage() {
   const [forms, setForms] = useState<FormOption[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<string>("all");
   const [nim, setNim] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<HasilResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,8 +79,8 @@ export default function HasilSeleksiPage() {
       if (!res.ok) throw new Error(data.error || "Gagal memeriksa kelulusan.");
 
       setResult(data);
-    } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan koneksi.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan koneksi.");
     } finally {
       setLoading(false);
     }
@@ -91,7 +105,7 @@ export default function HasilSeleksiPage() {
         {/* Logo */}
         <div className="relative w-24 h-24 md:w-28 md:h-28 mb-6 rounded-full border-4 border-accent shadow-xl bg-white flex items-center justify-center p-2 overflow-hidden">
           <Image
-            src="https://res.cloudinary.com/dm3zixaz4/image/upload/v1772567328/PMK_LOGO-removebg-preview_oydcdq.avif"
+            src={PMK_LOGO_URL}
             alt="PMK ITERA Logo"
             width={100}
             height={100}
@@ -227,7 +241,7 @@ export default function HasilSeleksiPage() {
                         Penempatan Pelayanan:
                       </h5>
                       <div className="space-y-3">
-                        {result.placements.map((p: any, idx: number) => (
+                        {result.placements.map((p, idx: number) => (
                           <div key={idx} className="p-4 md:p-5 rounded-2xl bg-white border border-border shadow-sm flex flex-col gap-4">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                               <div className="space-y-1">
