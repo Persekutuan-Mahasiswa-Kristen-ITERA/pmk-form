@@ -280,10 +280,37 @@ export async function toggleFormOpen(
   if (error) throw new Error(`Gagal mengubah status form: ${error.message}`);
 }
 
-/** Delete a form and its responses (admin). */
+/**
+ * Hapus form (admin) — AMAN (Fase 4C).
+ *
+ * Default strategis: form yang SUDAH MEMILIKI respons TIDAK BOLEH dihapus
+ * (hard-delete akan menghilangkan data + merusak cek-hasil). Penghapusan
+ * hanya diizinkan bila form BELUM punya respons sama sekali. Untuk menutup
+ * form yang sudah berjalan, pakai `toggleFormOpen(id, false)` — buka/tutup
+ * tanpa menghilangkan data.
+ *
+ * Penghitungan memakai head-count (tidak memuat baris respons).
+ */
 export async function deleteForm(id: string): Promise<void> {
   await requireAdmin();
   const supabase = await createClient();
+
+  const { count, error: countError } = await supabase
+    .from("form_responses")
+    .select("id", { count: "exact", head: true })
+    .eq("form_id", id);
+
+  if (countError) {
+    throw new Error(`Gagal memeriksa respons form: ${countError.message}`);
+  }
+
+  if ((count ?? 0) > 0) {
+    throw new Error(
+      `Form ini memiliki ${count} respons dan tidak dapat dihapus. ` +
+        "Tutup form (toggle) sebagai gantinya agar data tetap terjaga."
+    );
+  }
+
   const { error } = await supabase.from("forms").delete().eq("id", id);
   if (error) throw new Error(`Gagal menghapus form: ${error.message}`);
 }

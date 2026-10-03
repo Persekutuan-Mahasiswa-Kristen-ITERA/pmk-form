@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getAllForms, countFormResponses, countActiveForms } from "@/lib/forms";
+import { FormQuickActions } from "@/components/FormQuickActions";
 import type { Form, FormType } from "@/types/forms";
 
 export const revalidate = 0; // Dynamic route
@@ -156,6 +157,8 @@ function FormAdminCard({ form }: { form: Form & { responseCount: number } }) {
           </Link>
 
           <div className="flex items-center gap-1">
+            <FormQuickActions formId={form.id} isOpen={form.is_open} responseCount={form.responseCount} />
+
             <Link href={`/admin/forms/${form.id}/responses`}>
               <Button variant="outline" size="sm" className="h-8 text-xs">
                 <FileText className="w-3.5 h-3.5 mr-1" /> Respons ({form.responseCount})

@@ -1,7 +1,7 @@
 "use server";
 
-import { createForm, updateForm } from "@/lib/forms";
-import { revalidateForm } from "@/app/actions/revalidate";
+import { createForm, updateForm, toggleFormOpen, deleteForm } from "@/lib/forms";
+import { revalidateFormAdminData, revalidateForm } from "@/app/actions/revalidate";
 import type { Form } from "@/types/forms";
 
 type FormPayload = Omit<Form, "id" | "created_at" | "updated_at">;
@@ -27,5 +27,29 @@ export async function updateFormAction(id: string, payload: Partial<FormPayload>
     return { success: true as const, data };
   } catch (err) {
     return { success: false as const, error: err instanceof Error ? err.message : "Gagal memperbarui form." };
+  }
+}
+
+// Fase 4C: toggle 1-klik buka/tutup dari kartu admin. toggleFormOpen sudah
+// memanggil requireAdmin(); revalidate agar badge status langsung berubah.
+export async function toggleFormOpenAction(id: string, isOpen: boolean) {
+  try {
+    await toggleFormOpen(id, isOpen);
+    await revalidateFormAdminData();
+    return { success: true as const };
+  } catch (err) {
+    return { success: false as const, error: err instanceof Error ? err.message : "Gagal mengubah status form." };
+  }
+}
+
+// Fase 4C: hapus form dari kartu admin. deleteForm (lib) MENOLAK bila form
+// punya respons; pesan penolakan itu yang diteruskan ke admin.
+export async function deleteFormAction(id: string) {
+  try {
+    await deleteForm(id);
+    await revalidateFormAdminData();
+    return { success: true as const };
+  } catch (err) {
+    return { success: false as const, error: err instanceof Error ? err.message : "Gagal menghapus form." };
   }
 }

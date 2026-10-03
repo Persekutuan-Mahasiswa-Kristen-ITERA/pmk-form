@@ -25,8 +25,8 @@ Dokumen ini berisi dokumentasi teknis, arsitektur, skema database, rute aplikasi
 | **Landing Page Publik** | Hero tetap dan kartu khusus `RecruitmentCard` dari tabel `recruitments` | Hero diperbarui, filter kategori, quick action Cek Hasil & Masuk Admin, serta kartu generik lintas jenis form dari tabel `forms` | **[TERUBAH]** |
 | **Renderer Publik** | `/recruitment/[slug]` | `/form/[slug]` (renderer generik dinamis dengan Zod validation) | **[BARU]** |
 | **Export Data** | Hanya CSV & ZIP Oprec | Export CSV dinamis & Export ZIP Lampiran per-form | **[TERUBAH]** |
-| **Model Akses/Role** | Single role admin (`authenticated`) | Merekam peran berjenjang di `public.user_roles` (`super_admin`, `divisi_admin`) | **[BARU]** |
-| **Oprec Berjalan** | Terbatas pada recruitment tunggal | Tetap berjalan normal via rute/tabel lama tanpa terganggu | **[DIPERTAHANKAN]** |
+| **Model Akses/Role** | Single role admin (`authenticated`) | Satu level admin via `public.user_roles` (produksi: 1 baris `super_admin`). Nilai `divisi_admin` ada di schema tapi TIDAK dienforce di kode — manajemen admin berjenjang dijadwalkan Fase 5 (allowlist) | **[TERUBAH]** |
+| **Oprec Berjalan** | Terbatas pada recruitment tunggal | Data lama tetap utuh dan terlayani cek-hasil; route lama `/recruitment/[slug]` dan `/admin/recruitments` sudah tidak ada | **[DIPERTAHANKAN]** |
 
 ---
 
@@ -76,14 +76,18 @@ Menyimpan seluruh jawaban dari pengisi form.
 | `submitted_at` | `timestamptz` | Waktu submit |
 | `updated_at` | `timestamptz` | Waktu update |
 
-### 3. Tabel `public.user_roles` **[BARU]**
-Menyimpan peran admin berjenjang.
+### 3. Tabel `public.user_roles`
+Satu level admin (default-deny via `requireAdmin()` + `is_admin()`). Kolom `role`
+menyimpan `'super_admin'` atau `'divisi_admin'`, tetapi kode HANYA memeriksa
+keberadaan baris (ada = admin) — tidak ada cabang perilaku per role. Produksi
+saat ini: 1 baris `super_admin`. Role berjenjang yang dienforce dijadwalkan
+Fase 5 (model allowlist).
 
 | Kolom | Tipe | Deskripsi |
 | :--- | :--- | :--- |
 | `id` | `uuid` (PK) | Unique Identifier |
 | `user_id` | `uuid` (FK) | Relasi ke `auth.users(id)` |
-| `role` | `text` | `'super_admin'` atau `'divisi_admin'` |
+| `role` | `text` | `'super_admin'` atau `'divisi_admin'` (kode hanya cek keberadaan baris, bukan nilainya) |
 | `division` | `text` | Nama Divisi (misal: 'Humas', 'Acara') |
 
 ---
@@ -94,8 +98,8 @@ Menyimpan peran admin berjenjang.
 - **`/`**: Landing page utama (menampilkan form & recruitment yang aktif).
 - **`/form/[slug]`** **[BARU]**: Renderer publik untuk mengisi form generik.
 - **`/form/[slug]/success`** **[BARU]**: Halaman konfirmasi setelah berhasil submit form + QR / link WhatsApp.
-- **`/hasil`**: Halaman pengumuman & pencarian hasil seleksi (menggunakan NIM + Email).
-- **`/recruitment/[slug]`**: Rute publik oprec lama (dipertahankan untuk kompatibilitas).
+- **`/hasil`**: Halaman pengumuman & pencarian hasil seleksi (menggunakan NIM + Email). Melayani arsip rekrutmen lama dan form baru (via `form_responses`, sejak Fase 3).
+- ~~**`/recruitment/[slug]`**: Rute publik oprec lama~~ — DIHAPUS. Satu-satunya renderer publik adalah `/form/[slug]`.
 
 ### Rute Admin (Proteksi Auth & Middleware `proxy.ts`)
 - **`/admin/login`**: Halaman login admin.
@@ -104,7 +108,7 @@ Menyimpan peran admin berjenjang.
 - **`/admin/forms/new`** **[BARU]**: Form builder untuk membuat form baru.
 - **`/admin/forms/[id]`** **[BARU]**: Form builder untuk mengedit form.
 - **`/admin/forms/[id]/responses`** **[BARU]**: Viewer tabel respons & tombol Export CSV/ZIP.
-- **`/admin/recruitments`**: Rute admin oprec lama (dipertahankan).
+- ~~**`/admin/recruitments`**: Rute admin oprec lama~~ — DIHAPUS. Manajemen form hanya via `/admin/forms`.
 
 ---
 

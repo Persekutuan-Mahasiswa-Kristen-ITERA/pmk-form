@@ -125,11 +125,14 @@ export default function HasilSeleksiPage() {
         <Card className="w-full bg-white shadow-xl rounded-3xl border border-border/50 p-6 md:p-8 mb-8">
           <CardContent className="p-0 space-y-6">
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Dropdown Kategori / Pilihan Oprec */}
+              {/* Dropdown Kategori / Pilihan Oprec.
+                  Fase 4B: daftar ini adalah ARSIP rekrutmen lama (submissions /
+                  selection_results). Hasil seleksi form BARU dilayani juga oleh
+                  endpoint yang sama via form_responses (Fase 3-2b). */}
               {forms.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-foreground font-semibold text-base flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-primary" /> Pilih Program Rekrutmen
+                    <Filter className="w-4 h-4 text-primary" /> Pilih Program Rekrutmen (Arsip)
                   </Label>
                   <Select value={selectedFormId} onValueChange={setSelectedFormId}>
                     <SelectTrigger className="h-14 rounded-2xl bg-muted/20 border-border text-base font-medium">
