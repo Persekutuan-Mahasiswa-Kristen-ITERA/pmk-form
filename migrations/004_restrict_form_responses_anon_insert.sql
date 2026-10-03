@@ -1,0 +1,19 @@
+-- ==========================================
+-- MIGRASI 004: [DIGABUNG KE MIGRASI 003 — JANGAN DIJALANKAN SENDIRI]
+-- ==========================================
+-- Revisi Checkpoint 3: isi migration 004 (hapus anon INSERT ke
+-- form_responses) SUDAH DIGABUNGKAN ke migration 003 (bagian 2b).
+--
+-- ALASAN penggabungan: alur submit form berjalan melalui server action
+-- (submitFormResponseAction) yang memakai SERVICE ROLE (bypass RLS).
+-- Aplikasi TIDAK bergantung pada policy anon INSERT ke form_responses,
+-- jadi menutupnya tidak perlu ditunda menjadi tahap terpisah — aman
+-- dijalankan bersamaan dengan pengetatan RLS lainnya di 003.
+--
+-- FILE INI DIPERTAHANKAN sebagai penanda agar urutan migration tetap utuh
+-- dan rollback catatan sejarah jelas. JANGAN jalankan file ini sendiri;
+-- jalankan MIGRASI 003 (yang sudah mencakup isi 004).
+--
+-- Rollback 003 berisi pulihkan policy "Anyone can submit form responses"
+-- (bawah blok ROLLBACK di 003) yang setara dengan rollback 004.
+-- ==========================================

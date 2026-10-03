@@ -1,25 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
-// Rate limiting in-memory sederhana per IP (max 15 request per minute)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const limitInfo = rateLimitMap.get(ip);
-
-  if (!limitInfo || now > limitInfo.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + 60 * 1000 });
-    return false;
-  }
-
-  if (limitInfo.count >= 15) {
-    return true;
-  }
-
-  limitInfo.count += 1;
-  return false;
-}
+// Bentuk baris selection_results yang dipakai endpoint ini.
+type SelectionPlacement = {
+  nim: string;
+  nama: string;
+  prodi: string | null;
+  departemen: string;
+  divisi: string;
+  wa_group_link: string | null;
+};
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -38,9 +29,11 @@ function getServiceClient() {
 }
 
 export async function POST(req: Request) {
-  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "anonymous";
+  const ip = getClientIp(req.headers);
 
-  if (isRateLimited(ip)) {
+  // Rate limit per IP: 15 permintaan / menit. Lihat catatan di lib/rate-limit:
+  // in-memory limiter tidak andal lintas instance serverless.
+  if (rateLimit(`cek-hasil:${ip}`, 15, 60_000)) {
     return NextResponse.json(
       { error: "Terlalu banyak permintaan. Silakan tunggu beberapa saat." },
       { status: 429 }
@@ -123,7 +116,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       status: "ACCEPTED",
       nama: applicantName,
-      placements: results.map((r: any) => ({
+      placements: results.map((r: SelectionPlacement) => ({
         departemen: r.departemen,
         divisi: r.divisi === "Unknown" ? "-" : r.divisi,
         prodi: r.prodi,

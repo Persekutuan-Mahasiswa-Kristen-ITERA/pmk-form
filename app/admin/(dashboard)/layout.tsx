@@ -1,9 +1,38 @@
 import Link from "next/link";
-import { Home, FileStack } from "lucide-react";
+import { Home, FileStack, ShieldAlert } from "lucide-react";
 import Image from "next/image";
 import { SignOutButton } from "@/components/SignOutButton";
+import { getAdminUser } from "@/lib/auth";
+import { Card, CardContent } from "@/components/ui/card";
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  // Default-deny: `proxy.ts` already redirects unauthenticated users to
+  // /admin/login, so reaching this branch without an admin row means the user
+  // is logged in but is not an admin. We render a 403 instead of redirecting
+  // (redirecting to /admin/login would bounce back here for logged-in users).
+  const admin = await getAdminUser();
+
+  if (!admin) {
+    return (
+      <div className="min-h-screen bg-[#FAF6F0] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full border-t-8 border-t-destructive shadow-2xl bg-white rounded-3xl z-10">
+          <CardContent className="space-y-6 text-center pt-10 pb-10">
+            <div className="mx-auto w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+              <ShieldAlert className="w-8 h-8 text-destructive" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="font-serif text-2xl font-bold text-foreground">Akses Ditolak</h1>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Akun Anda tidak terdaftar sebagai admin. Hubungi super admin jika Anda merasa ini adalah kekeliruan.
+              </p>
+            </div>
+            <SignOutButton />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF6F0] flex flex-col font-sans">
       <header className="sticky top-0 z-50 w-full border-b border-accent/20 bg-white/90 backdrop-blur-md shadow-sm">

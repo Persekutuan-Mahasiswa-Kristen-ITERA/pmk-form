@@ -6,8 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { uploadFormAttachment } from "@/app/actions/uploadFile";
-import { createClient } from "@/lib/supabase/client";
-import { revalidateFormAdminData } from "@/app/actions/revalidate";
+import { submitFormResponseAction } from "@/app/actions/submitResponse";
 import { FormFieldRenderer } from "./FormFieldRenderer";
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
@@ -54,7 +53,6 @@ function toRendererConfig(f: FieldConfig): import("./FormFieldRenderer").FieldCo
 export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const supabase = createClient();
 
   const fields: FieldConfig[] = genericForm.form_fields || [];
   const rendererFields = fields.map(toRendererConfig);
@@ -107,7 +105,6 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
   const onSubmit = async (values: Record<string, unknown>) => {
     setIsSubmitting(true);
     try {
-      const fileUrls: string[] = [];
       const answers: Record<string, unknown> = {};
 
       // Use a stable key for file path; try common identity fields
@@ -130,25 +127,21 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
           if (!result.success || !result.url) {
             throw new Error(result.error || `Gagal mengupload ${field.label}`);
           }
-          fileUrls.push(result.url);
           answers[field.id] = result.url;
         } else {
           answers[field.id] = raw ?? null;
         }
       }
 
-      const { error } = await supabase.from("form_responses").insert({
-        form_id: genericForm.id,
+      const result = await submitFormResponseAction({
+        formId: genericForm.id,
         answers,
-        files: fileUrls.length > 0 ? fileUrls : [],
       });
 
-      if (error) {
-        console.error("Insert form_responses error", error);
-        throw new Error("Gagal menyimpan respons. Silakan coba lagi.");
+      if (!result.success) {
+        throw new Error(result.error || "Gagal menyimpan respons. Silakan coba lagi.");
       }
 
-      await revalidateFormAdminData(genericForm.id);
       router.push(`/form/${genericForm.slug}/success`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Terjadi kesalahan. Silakan coba lagi.";

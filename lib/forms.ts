@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getAdminUser, requireAdmin } from "@/lib/auth";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Form,
   FormResponse,
@@ -45,6 +47,7 @@ export async function getFormBySlug(slug: string): Promise<Form | null> {
 
 /** Fetch a single form by id (admin). */
 export async function getFormById(id: string): Promise<Form | null> {
+  await requireAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
@@ -65,6 +68,7 @@ export async function getAllForms(options?: {
   page?: number;
   pageSize?: number;
 }): Promise<{ data: Form[]; count: number }> {
+  await requireAdmin();
   const supabase = await createClient();
   const page = options?.page ?? 1;
   const pageSize = options?.pageSize ?? 20;
@@ -88,6 +92,7 @@ export async function getAllForms(options?: {
 
 /** Count active (open) forms — for admin dashboard stats. */
 export async function countActiveForms(): Promise<number> {
+  await requireAdmin();
   const supabase = await createClient();
   const { count, error } = await supabase
     .from("forms")
@@ -102,6 +107,7 @@ export async function countActiveForms(): Promise<number> {
 export async function createForm(
   payload: Omit<Form, "id" | "created_at" | "updated_at">
 ): Promise<Form> {
+  await requireAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
@@ -118,6 +124,7 @@ export async function updateForm(
   id: string,
   payload: Partial<Omit<Form, "id" | "created_at">>
 ): Promise<Form> {
+  await requireAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
@@ -135,6 +142,7 @@ export async function toggleFormOpen(
   id: string,
   isOpen: boolean
 ): Promise<void> {
+  await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase
     .from("forms")
@@ -146,6 +154,7 @@ export async function toggleFormOpen(
 
 /** Delete a form and its responses (admin). */
 export async function deleteForm(id: string): Promise<void> {
+  await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from("forms").delete().eq("id", id);
   if (error) throw new Error(`Gagal menghapus form: ${error.message}`);
@@ -180,6 +189,7 @@ export async function getFormResponses(
   formId: string,
   options?: { page?: number; pageSize?: number }
 ): Promise<{ data: FormResponse[]; count: number }> {
+  await requireAdmin();
   const supabase = await createClient();
   const page = options?.page ?? 1;
   const pageSize = options?.pageSize ?? 10;
@@ -201,6 +211,7 @@ export async function getFormResponses(
 export async function getAllFormResponses(
   formId: string
 ): Promise<FormResponse[]> {
+  await requireAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("form_responses")
@@ -214,6 +225,7 @@ export async function getAllFormResponses(
 
 /** Count responses for a form. */
 export async function countFormResponses(formId: string): Promise<number> {
+  await requireAdmin();
   const supabase = await createClient();
   const { count, error } = await supabase
     .from("form_responses")
@@ -227,13 +239,18 @@ export async function countFormResponses(formId: string): Promise<number> {
 /**
  * Check for a duplicate response using a specific field value.
  * Useful for preventing the same NIM from submitting twice.
+ *
+ * An optional `client` can be supplied when the caller already holds a client
+ * (e.g. the submission server action, which uses the service-role client so
+ * that the check works for anonymous submitters too).
  */
 export async function checkDuplicateResponse(
   formId: string,
   fieldId: string,
-  value: string
+  value: string,
+  client?: SupabaseClient
 ): Promise<boolean> {
-  const supabase = await createClient();
+  const supabase = client ?? (await createClient());
   const { count, error } = await supabase
     .from("form_responses")
     .select("id", { count: "exact", head: true })
@@ -246,6 +263,7 @@ export async function checkDuplicateResponse(
 
 /** Delete a single response (admin). */
 export async function deleteFormResponse(id: string): Promise<void> {
+  await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase
     .from("form_responses")
@@ -278,19 +296,19 @@ export async function getCurrentUserRole(): Promise<UserRoleRecord | null> {
 }
 
 /**
- * Derive permissions from the current user's role.
- * Super admin: full access to everything.
- * Divisi admin: access only limited to forms they created.
- * Fallback (any authenticated user without a role row): treated as super_admin
- * temporarily to avoid breaking existing admins before roles are populated.
+ * Derive permissions for the current request.
+ *
+ * DEFAULT-DENY: an authenticated user with no `user_roles` row gets no
+ * permissions. The old implementation fell back to super_admin for any
+ * authenticated user, which is unsafe now that public signups are enabled.
+ *
+ * Per-division scoping (divisi_admin) is deferred to Fase 4; today every
+ * role row grants full admin permissions.
  */
 export async function getCurrentUserPermissions(): Promise<PermissionCheck> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const admin = await getAdminUser();
 
-  if (!user) {
+  if (!admin) {
     return {
       canViewForms: false,
       canCreateForms: false,
@@ -302,32 +320,15 @@ export async function getCurrentUserPermissions(): Promise<PermissionCheck> {
     };
   }
 
-  const roleRecord = await getCurrentUserRole();
-
-  // Fallback: authenticated without a role row = super_admin for backward compat
-  if (!roleRecord || roleRecord.role === "super_admin") {
-    return {
-      canViewForms: true,
-      canCreateForms: true,
-      canEditForm: true,
-      canDeleteForm: true,
-      canViewResponses: true,
-      canDeleteResponses: true,
-      canExportResponses: true,
-      division: roleRecord?.division ?? null,
-    };
-  }
-
-  // divisi_admin: can manage forms they created only (enforced at query level)
   return {
     canViewForms: true,
     canCreateForms: true,
     canEditForm: true,
-    canDeleteForm: false,
+    canDeleteForm: true,
     canViewResponses: true,
-    canDeleteResponses: false,
+    canDeleteResponses: true,
     canExportResponses: true,
-    division: roleRecord.division,
+    division: admin.division,
   };
 }
 

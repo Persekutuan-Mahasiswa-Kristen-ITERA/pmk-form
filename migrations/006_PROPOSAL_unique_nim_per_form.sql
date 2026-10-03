@@ -1,0 +1,171 @@
+-- ==========================================
+-- MIGRASI 006 (USULAN UNTUK FASE 2/3 — JANGAN DIJALANKAN SEKARANG)
+--   Unique index duplikat NIM per form via kolom nim_normalized
+-- ==========================================
+-- LIKUIDASI USULAN LAMA: usulan pertama (unique index langsung pada
+-- answers->>'field_applicant_nim') DITINGGALKAN karena data lama mengandung
+-- 5 pasang duplikat NIM di produksi. Sesuai keputusan: DATA LAMA TIDAK DISENTUH,
+-- tidak ada resolve/penghapusan duplikat. Index langsung tidak bisa dibuat
+-- tanpa mengubah data lama, jadi pendekatan ini tidak layak.
+--
+-- PENDEKATAN BARU: kolom normatif `nim_normalized` yang DIISI OLEH SERVER ACTION
+-- (bukan oleh client, bukan oleh trigger), dengan unique PARTIAL index yang
+-- hanya menutupi baris baru:
+--
+--   - Kolom nullable. Baris LAMA -> nim_normalized IS NULL -> tidak masuk index
+--     -> data lama tetap utuh, duplikat lama tetap ada (diterima).
+--   - Barus BARU -> server action mengisi nim_normalized = NIM yang sudah
+--     dinormalisasi (uppercase + trim). Jika dua submit bersamaan mencoba NIM
+--     yang sama, unique index menolak salah satunya -> race condition teratasi
+--     secara deterministik di level database.
+--   - Index bersifat PARTIAL (WHERE nim_normalized IS NOT NULL) sehingga form
+--     TANPA field identitas (survey/presensi) tidak terkena sama sekali.
+--
+-- MENGAPA TIDAK PAKAI TRIGGER: normalisasi harus konsisten antara server action
+-- (yang mengecek duplikat) dan database. Memasukkan logika di server action
+-- menjadikannya dapat diuji unit-test dan tetap satu-sumber-kebenaran sama
+-- dengan cek duplikat aplikasi. Trigger hanya untuk pertahanan jika server
+-- action di-bypass - bisa ditambahkan terpisah di fase berikutnya jika perlu.
+--
+-- STATUS: USULAN. Tidak dijalankan di Fase 1. Ditunda ke Fase 2/3 karena
+-- memerlukan perubahan kode (server action mengisi kolom baru) + perubahan
+-- schema, dan Fase 1 berfokus pada otorisasi saja.
+-- ==========================================
+
+-- LANGKAH 1: Tambah kolom (nullable, tanpa default -> baris lama dapat NULL).
+--
+--   alter table public.form_responses
+--     add column if not exists nim_normalized text;
+--
+-- Catatan: tidak ada NOT NULL constraint, agar baris lama dan form tanpa
+-- field identitas tidak melanggar.
+
+-- LANGKAH 2: Unique PARTIAL index.
+--
+--   create unique index concurrently idx_form_responses_nim_normalized
+--     on public.form_responses (form_id, nim_normalized)
+--     where nim_normalized is not null;
+--
+-- !!! CREATE INDEX CONCURRENTLY TIDAK BISA DIJALANKAN DI DALAM TRANSAKSI.
+-- Supabase SQL Editor menjalankan setiap statement dalam transaction block
+-- tersarang, sehingga CONCURRENTLY akan error "CREATE INDEX CONCURRENTLY
+-- cannot run inside a transaction block". SOLUSI: jalankan LANGKAH 1 dan
+-- LANGKAH 3 (kode) terpisah, dan jalankan CREATE INDEX CONCURRENTLY melalui
+-- `supabase db` CLI atau koneksi psql dengan autocommit. Alternatif yang
+-- lebih sederhana: hapus kata CONCURRENTLY (tabel hanya 240 baris, lock
+-- singkat tidak bermasalah). Pilih salah satu:
+--
+--   -- Opsi A (lebih aman untuk tabel kecil, tanpa masalah transaksi):
+--   create unique index idx_form_responses_nim_normalized
+--     on public.form_responses (form_id, nim_normalized)
+--     where nim_normalized is not null;
+--
+-- Index menutup (form_id, nim_normalized) -> NIM unik PER FORM, konsisten
+-- dengan cek duplikat aplikasi.
+
+-- LANGKAH 3: Kode aplikasi (Fase 2/3) — di app/actions/submitResponse.ts.
+--
+-- !!! JANGAN HARDCODE nama field identitas. Field NIM saat ini punya id
+-- 'field_applicant_nim', tetapi id itu adalah KONVENSI lama (field dibuat di
+-- builder lama). Form baru yang dibuat lewat GenericFormBuilder menghasilkan
+-- id acak (field_<timestamp>), jadi tidak ada jaminan field NIM selalu punya
+-- id tersebut. Solusi yang benar: tentukan field identitas dari KONFIGURASI
+-- form, bukan nama field yang di-hardcode. Opsi:
+--   a) Tambahkan penanda di FieldConfig, mis. `isIdentity: true` atau
+--      `identityKey: 'nim'`, lalu cari field itu:
+--
+--         const idField = fields.find((f) => f.isIdentity);
+--         const raw = idField ? validated.data[idField.id] : undefined;
+--         const normalized =
+--           typeof raw === "string" && raw.trim() !== ""
+--             ? raw.trim().toUpperCase()
+--             : null;
+--
+--   b) Atau baca dari FormSettings (mis. settings.identity_field_id) yang
+--      diisi saat form dibuat.
+--
+-- Untuk sementara (kompatibilitas data lama), boleh pakai konvensi lama
+-- 'field_applicant_nim' sebagai FALLBACK saja, bukan satu-satunya sumber.
+--
+-- Penanganan error unique-violation (PostgreSQL error code 23505):
+-- server action harus MENDENGARKAN error insert dan menerjemahkannya menjadi
+-- pesan user-friendly, karena RACE CONDITION (dua submit bersamaan lolos
+-- dari cek aplikasi lalu keduanya insert) akan ditolak DB dengan 23505.
+-- Contoh di submitFormResponseAction bagian insert:
+--
+--   const { data: inserted, error: insertError } = await supabase
+--     .from("form_responses")
+--     .insert({
+--       form_id: formId,
+--       answers: validated.data,
+--       files,
+--       respondent_id: null,
+--       nim_normalized: normalized,   // <- kolom baru
+--     })
+--     .select("id")
+--     .single();
+--
+--   if (insertError) {
+--     // 23505 = unique_violation (kemungkinan besar: NIM sama submit bersamaan)
+--     if (insertError.code === "23505") {
+--       return {
+--         success: false as const,
+--         error: "Anda sudah mengirim respons untuk form ini.",
+--         duplicate: true,
+--       };
+--     }
+--     throw new Error(`Gagal menyimpan respons: ${insertError.message}`);
+--   }
+--
+-- Catatan: `supabase-js` v2 mengekspos `error.code` untuk error Postgres.
+-- Tanpa penanganan ini, user akan melihat pesan generik 500.
+--
+-- Normalisasi HARUS sama persis antara cek duplikat aplikasi dan nilai yang
+-- di-insert, jika tidak index tidak akan menangkap "a1b2" vs "A1B2".
+-- Normalisasi disarankan: trim() + upper() + hapus karakter non-alfanumerik
+-- (spasi/titik/hubung yang sering dipakai menulis NIM).
+
+-- LANGKAH 4: Backfill OPSIONAL untuk data lama (HANYA jika diinginkan,
+-- terpisah dari migration ini). Catatan: 5 pasang duplikat yang sudah ada
+-- akan membuat backfill gagal -> perlu COALESCE/DISTINCT ON (ambil satu baris
+-- per pasang) atau biarkan NULL untuk duplikat. SESUAI KEPUTUSAN: data lama
+-- tidak disentuh -> backfill dilewati, baris lama tetap NULL.
+--
+--   update public.form_responses
+--   set nim_normalized = upper(answers->>'field_applicant_nim')
+--   where nim_normalized is null
+--     and answers ? 'field_applicant_nim'
+--     and coalesce(answers->>'field_applicant_nim', '') <> '';
+
+-- LANGKAH 5: Verifikasi (read-only).
+--
+--   select indexname, indexdef from pg_indexes
+--   where tablename = 'form_responses'
+--     and indexname = 'idx_form_responses_nim_normalized';
+--
+--   -- Duplikat yang lolos (harus 0 setelah aplikasi mengisi kolom):
+--   select form_id, nim_normalized, count(*)
+--   from public.form_responses
+--   where nim_normalized is not null
+--   group by form_id, nim_normalized
+--   having count(*) > 1;
+
+-- ROLLBACK:
+--   drop index if exists public.idx_form_responses_nim_normalized;
+--   alter table public.form_responses drop column if exists nim_normalized;
+
+-- ==========================================
+-- DRY-RUN: cek duplikat di data LAMA (hanya informasi, TIDAK ada aksi).
+-- Hasil saat penulisan: 5 pasang duplikat, semuanya count=2. Sesuai keputusan,
+-- duplikat ini diterima dan TIDAK di-resolve.
+--
+--   select
+--     fr.form_id,
+--     fr.answers->>'field_applicant_nim' as nim,
+--     count(*) as dup_count
+--   from public.form_responses fr
+--   where fr.answers ? 'field_applicant_nim'
+--     and coalesce(fr.answers->>'field_applicant_nim', '') <> ''
+--   group by fr.form_id, fr.answers->>'field_applicant_nim'
+--   having count(*) > 1;
+-- ==========================================

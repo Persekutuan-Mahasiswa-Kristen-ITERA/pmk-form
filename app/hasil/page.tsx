@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { getRecruitmentFormOptions } from "@/app/actions/formOptions";
 import { GoldenParticles } from "@/components/GoldenParticles";
 import { BibleVerseBanner } from "@/components/BibleVerseBanner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,19 +26,19 @@ export default function HasilSeleksiPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
 
   useEffect(() => {
+    // Daftar form diambil di SERVER (service role) karena policy publik hanya
+    // memperlihatkan form is_open = true, sementara /hasil harus melayani
+    // form lama yang sudah ditutup. Lihat app/actions/formOptions.ts.
+    let active = true;
     async function loadForms() {
-      const { data } = await supabase
-        .from("forms")
-        .select("id, title")
-        .eq("form_type", "recruitment")
-        .order("created_at", { ascending: false });
-      if (data && data.length > 0) setForms(data);
+      const data = await getRecruitmentFormOptions();
+      if (active && data.length > 0) setForms(data);
     }
     loadForms();
-  }, [supabase]);
+    return () => { active = false; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
