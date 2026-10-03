@@ -109,6 +109,21 @@ bersama 002, sebelum deploy. Masalah ini lolos di Fase 0 karena `user_roles` mas
       1 user (admin). Bukti tidak-ada-42P17 sudah cukup. Akan divalidasi lagi
       pasca-OAuth Google (Fase 5) saat ada user non-admin sungguhan.
 - [ ] Buat form tes, uji submit E2E, tutup form tes
+      ✅ SELESAI: submit E2E BERHASIL di preview PR #3 (respons
+      'Febrian Yoel Anggara Saputra' masuk ke form_responses).
+      ⚠️ Ternyata tes pertama dijalankan di deployment PRODUKSI (main) dan gagal
+      — itu justru bukti migration 003 bekerja (anon INSERT ditolak 42501)
+      karena main belum berisi server action. Kode submit baru hanya ada di
+      branch, sehingga PR #3 WAJIB di-merge untuk mengembalikan kemampuan
+      submit di produksi.
+      🧹 SISA: 1 baris 'Test Debug' (sisipan debug) + respons E2E + form tes
+      'FORM UJI E2E' perlu dihapus via dashboard admin. deleteForm akan
+      cascade ke form_responses (FK on delete cascade), sehingga SEMUA respons
+      tes ikut terhapus sekaligus.
+      Catatan: error 400 saat saya mencoba menutup form via REST adalah salah
+      teknik saya sendiri (POST diterjemahkan PostgREST sebagai INSERT),
+      BUKAN bug di app — toggle/delete di dashboard memakai PATCH/DELETE
+      via supabase-js dan berfungsi normal.
 - [ ] Jalankan migration 003 + 007; verifikasi V1-V4
       ✅ SELESAI & TERVERIFIKASI melalui API (anon vs service role):
          - form_responses: 240 (service) vs 0 (anon) - data aman, anon diblokir
