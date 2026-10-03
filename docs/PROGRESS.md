@@ -190,10 +190,10 @@ eslint **0 error / 0 warning** (dari 7 error / 14 warning), `next build` OK.
 
 ## FASE 3 — Enforce Form Config (branch `feat/enforce-form-config`, belum merge)
 
-Status: KODE SELESAI & terverifikasi (tsc 0, eslint 0, build OK, 8 tes unit
-lolos). Migration 008 BELUM dijalankan. Instruksi rollout di
-`migrations/008_unique_nim_per_form.sql` (kode dulu, migration segera setelahnya;
-server action graceful bila kolom belum ada).
+Status: SELESAI PENUH 2026-10-03. PR #5 MERGED (`97307f3`), migration 008
+TERVERIFIKASI live: kolom `nim_normalized` ada (REST OK, baris lama NULL tak
+tersentuh), index `idx_form_responses_nim_normalized` ada (1 baris pg_indexes).
+tsc 0, eslint 0, build OK, 8 tes unit lolos.
 
 1. **Matriks fitur** (`docs/FORM_CONFIG_MATRIX.md`): 14 setting + 7 tipe field
    diaudit (grep builder/renderer/server). Temuan kunci: `collect_identity`
