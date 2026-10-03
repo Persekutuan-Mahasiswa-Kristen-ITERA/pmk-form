@@ -39,6 +39,7 @@ export function FormFieldRenderer({ fieldConfig, control }: FormFieldRendererPro
                         {(() => {
                             switch (fieldConfig.type) {
                                 case "text":
+                                case "short_text":
                                 case "email":
                                 case "phone":
                                 case "url":

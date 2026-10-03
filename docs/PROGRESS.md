@@ -188,6 +188,37 @@ eslint **0 error / 0 warning** (dari 7 error / 14 warning), `next build` OK.
 
 ---
 
+## FASE 3 — Enforce Form Config (branch `feat/enforce-form-config`, belum merge)
+
+Status: KODE SELESAI & terverifikasi (tsc 0, eslint 0, build OK, 8 tes unit
+lolos). Migration 008 BELUM dijalankan. Instruksi rollout di
+`migrations/008_unique_nim_per_form.sql` (kode dulu, migration segera setelahnya;
+server action graceful bila kolom belum ada).
+
+1. **Matriks fitur** (`docs/FORM_CONFIG_MATRIX.md`): 14 setting + 7 tipe field
+   diaudit (grep builder/renderer/server). Temuan kunci: `collect_identity`
+   tidak diimplementasikan di mana pun (7/8 form produksi aktif), `validation`
+   tidak dibaca schema, `open_date` hanya di landing, `redirect_url`/
+   `show_progress`/`require_login` 0 referensi.
+2. **`collect_identity` diimplementasikan** (`resolveFormFields` di lib/forms.ts
+   — satu sumber kebenaran renderer + server). Suntik Nama/NIM/Email/Angkatan
+   dengan id stabil `field_applicant_*` (kompatibel data lama + cek-hasil).
+3. **Cek-hasil → `form_responses`**: `/api/cek-hasil` fallback ke query
+   `form_responses` (contains answers NIM+email) bila `submissions` kosong.
+4. **Server enforce**: submit pakai `isFormActive` (open_date kini dihormati),
+   schema terapkan `validation` (min/maxLength, pattern, customMessage),
+   `email`/`url`/`number` punya validasi format dengan pembeda required/optional.
+5. **FieldType disatukan**: builder `text`→`short_text` (konsisten data produksi);
+   tambah `email`/`phone`/`url`/`number`; renderer tangani `short_text` eksplisit;
+   `datetime`/`address` tetap tidak ditawarkan (renderer belum dukung).
+6. **Duplikat NIM**: `normalizeNim` tunggal (trim+upper+bersihkan) dipakai cek
+   aplikasi + kolom `nim_normalized`; migration 008 (unique PARTIAL index);
+   23505→pesan "sudah mengirim"; 42703→fallback graceful pra-migration.
+7. **Tes unit** (`npm run test:unit`, Node bawaan, tanpa dep baru): 8 tes —
+   `isFormActive`, `resolveFormFields` (4), `normalizeNim`, `buildFormSchema` (3).
+
+---
+
 ## PRODUKSI (snapshot Fase 0, untuk konteks)
 
 - 7 forms (semua `form_type=recruitment`, `is_open=false`)

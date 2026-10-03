@@ -50,12 +50,51 @@ export function buildFormSchema(fields: FieldConfig[]) {
           : z.string().nullish();
         break;
 
+      case "email":
+        // F2 helper text: optional field menerima null/kosong (client kirim null).
+        shape[field.id] = field.required
+          ? z.string().min(1, `${field.label} wajib diisi.`).email(`${field.label} harus berupa email yang valid.`)
+          : z.string().email(`${field.label} harus berupa email yang valid.`).nullish();
+        break;
+
+      case "url":
+        shape[field.id] = field.required
+          ? z.string().min(1, `${field.label} wajib diisi.`).url(`${field.label} harus berupa URL yang valid.`)
+          : z.string().url(`${field.label} harus berupa URL yang valid.`).nullish();
+        break;
+
+      case "number":
+        shape[field.id] = field.required
+          ? z.string().min(1, `${field.label} wajib diisi.`).regex(/^\d+$/, `${field.label} harus berupa angka.`)
+          : z.string().regex(/^\d*$/, `${field.label} harus berupa angka.`).nullish();
+        break;
+
       default:
-        // text, short_text, long_text, number, email, phone, url, address,
-        // date, datetime — all submitted as strings.
+        // text, short_text, long_text, phone, address, date, datetime —
+        // semua dikirim sebagai string.
         shape[field.id] = field.required
           ? z.string().min(1, `${field.label} wajib diisi.`)
           : z.string().nullish();
+    }
+
+    // Fase 3-2c: terapkan validation opsional (dari builder) pada field string.
+    // Dilakukan setelah switch supaya semua tipe string bisa divalidasi.
+    const v = field.validation;
+    if (v) {
+      const current = shape[field.id];
+      if (current instanceof z.ZodString) {
+        let chain = current;
+        if (typeof v.minLength === "number") {
+          chain = chain.min(v.minLength, v.customMessage ?? `${field.label} minimal ${v.minLength} karakter.`);
+        }
+        if (typeof v.maxLength === "number") {
+          chain = chain.max(v.maxLength, v.customMessage ?? `${field.label} maksimal ${v.maxLength} karakter.`);
+        }
+        if (v.pattern) {
+          chain = chain.regex(new RegExp(v.pattern), v.patternMessage ?? v.customMessage ?? `${field.label} format tidak valid.`);
+        }
+        shape[field.id] = chain;
+      }
     }
   }
 

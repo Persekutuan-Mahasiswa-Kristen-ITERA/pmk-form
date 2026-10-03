@@ -8,6 +8,8 @@ import type {
   UserRoleRecord,
   PermissionCheck,
   FormType,
+  FieldConfig,
+  FormSettings,
 } from "@/types/forms";
 
 // ==========================================
@@ -36,6 +38,70 @@ export function isFormActive(form: {
   if (form.open_date && new Date(form.open_date).getTime() > now) return false;
   if (form.close_date && new Date(form.close_date).getTime() <= now) return false;
   return true;
+}
+
+/**
+ * Field identitas otomatis (Fase 3-2a).
+ *
+ * `settings.collect_identity` ditawarkan builder sebagai toggle "Kumpulkan
+ * Identitas Otomatis (Nama/NIM/Email/Prodi)" tetapi sebelumnya TIDAK
+ * diimplementasikan di renderer/server — form yang aktif toggle-nya tidak
+ * mengumpulkan identitas apa pun. 7 dari 8 form produksi memakainya.
+ *
+ * Field disuntikkan dengan id STABIL (bukan label) supaya:
+ *  - pengecekan duplikat NIM di submitResponse (`field_applicant_nim`) cocok,
+ *  - cek-hasil bisa membaca `field_applicant_nim`/`field_applicant_name`/
+ *    `field_applicant_email` (sama seperti data pra-migrasi).
+ *
+ * Field yang sudah dideklasikan di form TIDAK digandakan: jika form sudah punya
+ * field dengan id yang sama, yang ada dipakai (admin bebas mengaturnya).
+ */
+const IDENTITY_FIELD_IDS = {
+  name: "field_applicant_name",
+  nim: "field_applicant_nim",
+  email: "field_applicant_email",
+  angkatan: "field_applicant_angkatan",
+} as const;
+
+/**
+ * Selesaikan field form yang akan dirender/divalidasi, termasuk menyuntikkan
+ * field identitas otomatis saat `settings.collect_identity` true.
+ *
+ * SATU sumber kebenaran ini dipakai OLEH RENDERER (via getFormBySlug) DAN
+ * server action submit — keduanya melihat field yang sama, jadi validasi
+ * server tidak bisa dilewati dan UI tidak bisa menyembunyikan field wajib.
+ */
+export function resolveFormFields(form: {
+  form_fields?: FieldConfig[] | null;
+  settings?: FormSettings | null;
+}): FieldConfig[] {
+  const fields = (form.form_fields ?? []) as FieldConfig[];
+  const settings = (form.settings ?? {}) as FormSettings;
+
+  if (!settings.collect_identity) return fields;
+
+  const existing = new Set(fields.map((f) => f.id));
+  const injected: FieldConfig[] = [];
+
+  const identityFields: FieldConfig[] = [
+    { id: IDENTITY_FIELD_IDS.name, type: "text", label: "Nama Lengkap", required: true },
+    { id: IDENTITY_FIELD_IDS.nim, type: "text", label: "NIM", required: true },
+    { id: IDENTITY_FIELD_IDS.email, type: "email", label: "Email", required: true },
+    {
+      id: IDENTITY_FIELD_IDS.angkatan,
+      type: "text",
+      label: "Angkatan",
+      required: false,
+      placeholder: "contoh: 2023",
+    },
+  ];
+
+  for (const f of identityFields) {
+    if (!existing.has(f.id)) injected.push(f);
+  }
+
+  // Identitas disisipkan di AWAL (paling atas form) agar urutan alami.
+  return [...injected, ...fields];
 }
 
 /**
@@ -101,7 +167,10 @@ export async function getFormBySlug(slug: string): Promise<Form | null> {
     if (error.code === "PGRST116") return null; // not found
     throw new Error(`Gagal memuat form: ${error.message}`);
   }
-  return data as Form;
+
+  // Fase 3-2a: suntikkan field identitas otomatis bila collect_identity aktif.
+  // resolveFormFields adalah sumber kebenaran bersama renderer & server action.
+  return { ...data, form_fields: resolveFormFields(data) } as Form;
 }
 
 /** Fetch a single form by id (admin). */
@@ -419,10 +488,24 @@ export async function upsertUserRole(
 
 /** Remove a role row (super_admin only). */
 export async function removeUserRole(userId: string): Promise<void> {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("user_roles")
-    .delete()
-    .eq("user_id", userId);
-  if (error) throw new Error(`Gagal menghapus role: ${error.message}`);
+    const supabase = await createClient();
+    const { error } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId);
+    if (error) throw new Error(`Gagal menghapus role: ${error.message}`);
+}
+
+/**
+  * Normalisasi NIM (Fase 3-5).
+  *
+  * Normalisasi yang sama dipakai saat (a) mengecek duplikat aplikasi dan
+  * (b) mengisi kolom `nim_normalized` untuk unique PARTIAL index (migration
+  * 008). Konsistensi ini WAJIB — bila tidak, index tidak akan menangkap
+  * "a1b2" vs "A1B2".
+  *
+  * Aturan: trim → uppercase → hapus spasi → hapus karakter non-alfanumerik.
+  */
+export function normalizeNim(raw: string): string {
+    return raw.trim().toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9]/g, "");
 }
