@@ -47,13 +47,21 @@ import { revalidateForm } from "@/app/actions/revalidate";
 import type { Form, FieldConfig, FieldType, FormType, FormSettings } from "@/types/forms";
 
 const FIELD_TYPES: { type: FieldType; label: string; description: string }[] = [
-  { type: "text", label: "Teks Pendek", description: "Input satu baris (nama, judul, dsb)" },
+  { type: "short_text", label: "Teks Pendek", description: "Input satu baris (nama, judul, dsb)" },
   { type: "long_text", label: "Teks Panjang / Paragraf", description: "Input beberapa baris (alasan, deskripsi)" },
+  { type: "email", label: "Email", description: "Input email dengan validasi format" },
+  { type: "phone", label: "Nomor Telepon", description: "Input angka untuk nomor telepon/WhatsApp" },
+  { type: "url", label: "URL / Tautan", description: "Input tautan web dengan validasi format" },
+  { type: "number", label: "Angka", description: "Input angka saja" },
   { type: "dropdown", label: "Dropdown (Pilihan Tunggal)", description: "Daftar pilihan bertingkat" },
   { type: "radio", label: "Radio Button", description: "Pilihan tunggal berbentuk tombol radio" },
   { type: "checkbox", label: "Checkbox (Pilihan Berganda)", description: "Pilihan yang bisa dicentang lebih dari satu" },
   { type: "date", label: "Tanggal", description: "Pemilih tanggal" },
   { type: "file_upload", label: "Upload Lampiran", description: "Unggah dokumen (PDF, JPG, PNG, DOC)" },
+  // CATATAN: tipe berikut ADA di FieldType tetapi BELUM DIDUKUNG renderer
+  // (tidak punya case di FormFieldRenderer). Jangan ditawarkan sampai
+  // renderer mendukungnya — lihat docs/FORM_CONFIG_MATRIX.md.
+  // { type: "datetime", ... }, { type: "address", ... },
 ];
 
 const FORM_TYPES: { value: FormType; label: string }[] = [
