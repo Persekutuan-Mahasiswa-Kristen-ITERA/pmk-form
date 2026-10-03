@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Home, FileStack, ShieldAlert } from "lucide-react";
+import { Home, FileStack, ShieldAlert, Users } from "lucide-react";
 import Image from "next/image";
 import { PMK_LOGO_URL } from "@/components/PMKLogo";
 import { SignOutButton } from "@/components/SignOutButton";
@@ -61,6 +61,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 <FileStack className="w-4 h-4 mr-2 opacity-80 flex-shrink-0" />
                 Formulir
               </Link>
+              {admin.role === "super_admin" && (
+                <Link
+                  href="/admin/users"
+                  className="transition-colors hover:bg-highlight hover:text-primary text-foreground flex items-center px-4 py-2.5 rounded-xl font-medium text-sm border border-transparent hover:border-accent/40 whitespace-nowrap"
+                >
+                  <Users className="w-4 h-4 mr-2 opacity-80 flex-shrink-0" />
+                  Admin
+                </Link>
+              )}
             </nav>
           </div>
 
