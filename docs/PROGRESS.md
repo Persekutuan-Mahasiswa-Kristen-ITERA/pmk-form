@@ -368,6 +368,26 @@ Urutan disetujui user (balasan `lanjut`): CI → Turnstile → status respons
 - Verifikasi lokal dgn placeholder yg sama: tsc 0, eslint 0, 31/31 tes, build OK.
   CI GitHub: hijau 57 dtk setelah fix Node.
 
+### Item 2: Cloudflare Turnstile (branch `feat/turnstile`)
+
+- `lib/turnstile.ts` (server-only): `verifyTurnstileToken()` — fetch ke
+  `siteverify` Cloudflare memakai SECRET KEY. Fail-open: gangguan Cloudflare
+  TIDAK menggagalkan submit, tapi token kosong/invalid DITOLAK.
+- `components/TurnstileWidget.tsx`: script resmi Cloudflare (render explicit)
+  TANPA dependency npm baru; dedup script + cleanup widget on unmount.
+- `GenericFormRenderer`: widget tampil di atas tombol submit saat
+  `NEXT_PUBLIC_TURNSTILE_SITE_KEY` terisi DAN `settings.require_captcha !== false`.
+- `submitResponse`: verifikasi token di server SETELAH form dimuat (per-form),
+  sebelum simpan.
+- `GenericFormBuilder`: switch "Verifikasi Anti-Bot" di pengaturan tambahan.
+- Env baru: `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (publik) + `TURNSTILE_SECRET_KEY`
+  (server saja). Keduanya kosong = fitur nonaktif total.
+- `docs/TURNSTILE_SETUP.md`: langkah dashboard Cloudflare + env + uji + matriks
+  keamanan.
+- `tests/stubs/server-only.mjs` + registrasi di loader: agar modul server-only
+  bisa diuji unit (manfaat untuk item Fase 7 berikutnya).
+- Verifikasi: tsc 0, eslint 0, build OK, 39/39 tes (8 baru).
+
 ---
 
 ## PRODUKSI (snapshot Fase 0, untuk konteks)
