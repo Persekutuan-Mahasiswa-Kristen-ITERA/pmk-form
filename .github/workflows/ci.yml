@@ -1,0 +1,77 @@
+name: CI
+
+# CI untuk PMK Form Platform (Fase 7-7).
+#
+# Tujuan: cegah kode yang gagal tsc/eslint/build/tes masuk ke main.
+# Berjalan di setiap PR ke main dan setiap push ke main.
+#
+# CATATAN JUJUR:
+#   - next build butuh env Supabase (NEXT_PUBLIC_*). CI pakai placeholder
+#     aman (build tetap berhasil; runtime TIDAK diuji di sini).
+#   - Tidak ada secret asli di CI. Placeholder di bawah hanya dummy.
+#   - Tes E2E (Playwright) dan Sentry TIDAK termasuk (item terpisah).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Batalkan run lama pada push baru ke PR yang sama (hemat quota).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: tsc + eslint + build + unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # Node 24 diperlukan: tes unit memakai file .ts langsung (type
+          # stripping bawaan). Node 20 menolak ekstensi .ts.
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Placeholder env agar `next build` tidak crash pada pembacaan env
+      # publik. NILAI INI BUKAN KREDENSIAL ASLI (dummy pendek, cukup hadir).
+      - name: Build env placeholders
+        run: |
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=https://ci-placeholder.supabase.co"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-placeholder-anon-key"
+            echo "SUPABASE_SERVICE_ROLE_KEY=ci-placeholder-service-key"
+          } > .env
+
+      - name: Type check (tsc)
+        run: npx tsc --noEmit
+
+      - name: Lint (eslint)
+        run: npx eslint .
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Build (next build)
+        run: npm run build
+
+      # Upload artifact build untuk inspeksi (opsional, kecil).
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build
+          path: .next
+          retention-days: 3
