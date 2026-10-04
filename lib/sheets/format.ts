@@ -87,3 +87,40 @@ export function parseSpreadsheetId(input: string): string {
   const match = trimmed.match(/\/spreadsheets\/d\/([A-Za-z0-9-_]+)/);
   return match ? match[1] : trimmed;
 }
+
+/**
+ * Terjemahkan status + pesan error Google Sheets menjadi pesan admin yang
+ * LANGSUNG bisa ditindaklanjuti (Fase 6).
+ *
+ * Kenapa perlu: Google memakai 403 untuk "belum di-share" DAN untuk "Sheets
+ * API belum diaktifkan di project". Tanpa membedakan keduanya, admin disuruh
+ * terus-menerus share spreadsheet padahal masalahnya di Google Cloud.
+ *
+ * Murni (tanpa network) supaya bisa diuji unit tanpa kredensial.
+ */
+export function describeSheetsError(
+  status: number,
+  googleMessage: string,
+  serviceEmail: string | null
+): string {
+  const emailHint = serviceEmail ?? "(service account belum dikonfigurasi)";
+
+  // "Google Sheets API has not been used in project ... or it is disabled"
+  if (
+    /has not been used in project|it is disabled|sheets\.googleapis\.com\/overview/i.test(
+      googleMessage
+    )
+  ) {
+    return "Google Sheets API belum diaktifkan di project service account ini. Buka Google Cloud Console project service account -> APIs & Services -> Library -> cari 'Google Sheets API' -> Enable, lalu coba lagi.";
+  }
+  if (status === 401) {
+    return "Kredensial service account ditolak (401). Periksa GOOGLE_SERVICE_ACCOUNT_EMAIL & GOOGLE_PRIVATE_KEY (format backslash-n literal) di env Vercel, lalu redeploy.";
+  }
+  if (status === 403) {
+    return `Spreadsheet belum bisa dibuka service account (403). Bagikan spreadsheet sebagai Editor ke: ${emailHint}. Sudah dibagikan? Pastikan email-nya persis sama, atau periksa pembatasan sharing organisasi (Google Workspace).`;
+  }
+  if (status === 404) {
+    return `Spreadsheet tidak ditemukan atau belum di-share (404). Periksa ID/URL spreadsheet, dan pastikan sudah di-share sebagai Editor ke: ${emailHint}`;
+  }
+  return `Sheets API merespons HTTP ${status}.`;
+}

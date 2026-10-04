@@ -8,6 +8,7 @@ import {
   sanitizeError,
   backoffMinutes,
   parseSpreadsheetId,
+  describeSheetsError,
 } from "@/lib/sheets/format";
 // SHEETS_API tinggal di format.ts (bukan client.ts yang "server-only")
 // supaya bisa diuji regresi tanpa memicu error server-only.
@@ -131,4 +132,31 @@ test("parseSpreadsheetId: ekstrak dari URL atau terima ID mentah", () => {
   );
   assert.equal(parseSpreadsheetId("1AbC123_xyz"), "1AbC123_xyz");
   assert.equal(parseSpreadsheetId("  1AbC123  "), "1AbC123");
+});
+
+// --- pesan error yang membedakan penyebab (fix/sheets-403-messages) ---
+
+test("describeSheetsError: 403 API-disabled jadi pesan 'aktifkan Sheets API'", () => {
+  const googleMsg =
+    "Google Sheets API has not been used in project 123 before or it is disabled. " +
+    "Enable it by visiting https://console.developers.google.com/apis/api/sheets.googleapis.com/overview?project=123";
+  const out = describeSheetsError(403, googleMsg, "sa@x.iam.gserviceaccount.com");
+  assert.ok(/belum diaktifkan/i.test(out), out);
+  assert.ok(!/belum di-share/i.test(out), "tidak boleh menyuruh share");
+});
+
+test("describeSheetsError: 403 biasa = pesan share + email", () => {
+  const out = describeSheetsError(403, "The caller does not have permission", "sa@x.iam.gserviceaccount.com");
+  assert.ok(/Bagikan spreadsheet sebagai Editor ke: sa@x\.iam\.gserviceaccount\.com/.test(out), out);
+});
+
+test("describeSheetsError: 401 = kredensial ditolak", () => {
+  const out = describeSheetsError(401, "unauthorized", "sa@x.iam.gserviceaccount.com");
+  assert.ok(/ditolak \(401\)/.test(out), out);
+});
+
+test("describeSheetsError: 404 sebutkan cek ID + share", () => {
+  const out = describeSheetsError(404, "Requested entity was not found.", null);
+  assert.ok(/Periksa ID\/URL spreadsheet/.test(out), out);
+  assert.ok(/belum dikonfigurasi/.test(out), "email null -> beri penanda");
 });
