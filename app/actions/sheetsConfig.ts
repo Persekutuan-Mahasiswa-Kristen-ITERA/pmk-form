@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { testConnection } from "@/lib/sheets/client";
+import { syncFormBatch } from "@/lib/sheets/sync";
 
 /**
  * Server actions konfigurasi Google Sheets per form (Fase 6-4).
@@ -219,6 +220,16 @@ export async function backfillSyncAction(formId: string) {
     cursor += BATCH;
   }
 
+  // Proses antrinya SEKARANG, tidak menunggu cron (yang di paket Hobby hanya
+  // 1x sehari). syncFormBatch mengirim seluruh baris form dalam SATU panggilan
+  // append, jadi 240 respons = 1 request ke Google.
+  const syncResult = await syncFormBatch(formId);
+
   revalidatePath(`/admin/forms/${formId}`);
-  return { success: true as const, count: inserted };
+  return {
+    success: true as const,
+    count: inserted,
+    synced: syncResult.synced,
+    syncError: syncResult.error,
+  };
 }
