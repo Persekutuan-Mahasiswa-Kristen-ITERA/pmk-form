@@ -1,7 +1,12 @@
 import "server-only";
 
 import { GoogleAuth } from "google-auth-library";
-import { buildHeader, sanitizeError, SHEETS_API } from "@/lib/sheets/format";
+import {
+  buildHeader,
+  sanitizeError,
+  SHEETS_API,
+  describeSheetsError,
+} from "@/lib/sheets/format";
 
 /**
  * Klien Google Sheets (Fase 6-1).
@@ -61,14 +66,23 @@ async function getAccessToken(): Promise<string> {
     );
   }
 
-  const auth = new GoogleAuth({
-    credentials: { client_email: clientEmail, private_key: privateKey },
-    scopes: SCOPES,
-  });
-  const client = await auth.getClient();
-  const token = await client.getAccessToken();
-  if (!token.token) throw new Error("Gagal mendapatkan access token Google.");
-  return token.token;
+  try {
+    const auth = new GoogleAuth({
+      credentials: { client_email: clientEmail, private_key: privateKey },
+      scopes: SCOPES,
+    });
+    const client = await auth.getClient();
+    const token = await client.getAccessToken();
+    if (!token.token) throw new Error("Access token kosong.");
+    return token.token;
+  } catch (err) {
+    // Bungkus dengan penanda biar testConnection bisa membedakannya dari
+    // kegagalan jaringan/HTTP (pesan ini hanya untuk admin, tanpa PII).
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Kredensial service account ditolak Google. Periksa GOOGLE_PRIVATE_KEY (format backslash-n literal) & email di env, lalu redeploy. Detail: ${detail.slice(0, 160)}`
+    );
+  }
 }
 
 // Fungsi murni (escape/build/sanitize) tinggal di format.ts agar bisa
@@ -187,26 +201,32 @@ export async function testConnection(
 ): Promise<{ ok: boolean; message: string }> {
   try {
     const token = await getAccessToken();
-    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`;
+    const metaUrl = `${SHEETS_API}/${spreadsheetId}?fields=sheets.properties.title`;
     const res = await fetch(metaUrl, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
-    if (res.status === 404) {
-      return {
-        ok: false,
-        message: "Spreadsheet tidak ditemukan. Periksa ID/URL spreadsheet.",
-      };
-    }
-    if (res.status === 403) {
-      return {
-        ok: false,
-        message: `Spreadsheet belum di-share ke service account. Bagikan spreadsheet sebagai Editor ke: ${process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ?? "(service account belum dikonfigurasi)"}`,
-      };
-    }
+
     if (!res.ok) {
-      return { ok: false, message: `Sheets API merespons HTTP ${res.status}.` };
+      // Baca pesan error Google dulu: 403 bisa berarti "belum di-share"
+      // ATAU "Sheets API belum diaktifkan di project" — keduanya harus dibedakan.
+      let googleMessage = "";
+      try {
+        const body = (await res.json()) as { error?: { message?: string } };
+        googleMessage = body.error?.message ?? "";
+      } catch {
+        // Bukan JSON (mis. halaman HTML 404 lama) -> pesan kosong cukup.
+      }
+      return {
+        ok: false,
+        message: describeSheetsError(
+          res.status,
+          googleMessage,
+          process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ?? null
+        ),
+      };
     }
+
     const meta = (await res.json()) as {
       sheets?: { properties: { title: string } }[];
     };
@@ -219,12 +239,14 @@ export async function testConnection(
     }
     return { ok: true, message: `Terhubung. Sheet "${sheetName}" siap.` };
   } catch (err) {
+    // Kredensial salah format/email -> pesan dari getAccessToken (mengandung
+    // penanda "Kredensial service account"). Lainnya anggap gagal jaringan.
     return {
       ok: false,
       message:
         err instanceof Error && /Kredensial service account/.test(err.message)
           ? err.message
-          : "Gagal terhubung ke Google Sheets. Coba lagi nanti.",
+          : "Gagal terhubung ke Google Sheets (cek env / jaringan). Coba lagi nanti.",
     };
   }
 }
