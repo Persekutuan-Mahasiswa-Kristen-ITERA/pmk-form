@@ -349,6 +349,27 @@ Yang dikerjakan:
 
 ---
 
+## FASE 7 — Peningkatan opsional (satu per satu, branch per item)
+
+Urutan disetujui user (balasan `lanjut`): CI → Turnstile → status respons
+→ duplikasi form → audit log → soft delete/backup → sisanya kalau dibutuhkan.
+
+### Item 1: CI GitHub Actions (branch `ci/github-actions`, PR #13)
+
+- `.github/workflows/ci.yml`: jalankan tiap PR + push ke cabang utama.
+  Langkah berurutan: `npm ci` → `npx tsc --noEmit` → `npx eslint .` →
+  `npm run test:unit` → `npm run build`. Gagal satu = PR merah.
+- Node 24 (bukan 20): tes unit memakai file `.ts` langsung, Node 20 menolak
+  ekstensi `.ts` (ERR_UNKNOWN_FILE_EXTENSION, ditemukan saat CI pertama merah).
+- Env placeholder DUMMY pendek untuk build (bukan kredensial asli; runtime
+  tidak diuji di CI).
+- concurrency batalkan run lama, permission `contents: read`, timeout 20 mnt,
+  artifact `.next` retensi 3 hari.
+- Verifikasi lokal dgn placeholder yg sama: tsc 0, eslint 0, 31/31 tes, build OK.
+  CI GitHub: hijau 57 dtk setelah fix Node.
+
+---
+
 ## PRODUKSI (snapshot Fase 0, untuk konteks)
 
 - 7 forms (semua `form_type=recruitment`, `is_open=false`)
