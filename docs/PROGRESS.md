@@ -312,6 +312,43 @@ BELUM dijalankan di produksi.
 
 ---
 
+## FASE 6 — Integrasi Google Sheets (branch `feat/sheets-sync`, BELUM merge)
+
+Keputusan CHECKPOINT 6.2 (disetujui user via `lanjut`): (a) `google-auth-library`
++ fetch REST ringan (bukan `googleapis` full SDK), (b) config JSONB `sheets_config`
+di `forms` mengikuti pola `settings`, (c) panduan service account ditulis.
+
+Yang dikerjakan:
+- `migrations/010_sheets_integration.sql`: kolom `forms.sheets_config` JSONB
+  (NULL = tanpa integrasi) + tabel `sheets_outbox` (PK response_id, status
+  pending|synced|failed, attempts, next_attempt_at, last_error sanitasi,
+  synced_at) + 2 index + RLS admin-only. Tervalidasi Postgres 17 isolated:
+  COMMIT, objek lengkap, idempoten 2x (0 error). Rollback aman di komentar file.
+- `lib/sheets/format.ts`: fungsi murni (escape formula `=+-@`, flatten array,
+  buildRow id-dulu-label-fallback, buildHeader + `__response_id`, sanitizeError
+  buang JWT/potong 250, backoff 2^n maks 60, parse ID dari URL).
+- `lib/sheets/client.ts` (server-only): service account + fetch REST (RAW mode,
+  ensureHeader aturan tambah/hapus/rename, rowExists max 500 baris,
+  appendRows batch, testConnection 404/403/judul-sheet).
+- `lib/sheets/sync.ts`: syncOne + processOutboxBatch(50), gagal max 5x lalu failed.
+- `submitResponse.ts`: enqueue outbox + `after()` best-effort di KEDUA jalur
+  sukses (utama + fallback 008); migrasi 010 belum jalan = dilewati diam-diam.
+- `app/actions/sheetsConfig.ts`: save/get/test/retry/backfill (batched 200,
+  upsert ignoreDuplicates) — semua `requireAdmin()`.
+- `app/api/cron/sheets-sync/route.ts`: CRON_SECRET constant-time, tanpa input.
+  `vercel.json`: cron tiap 5 menit.
+- `components/SheetsSettingsPanel.tsx` di halaman edit form + peringatan PII +
+  email service account untuk di-share.
+- `types/forms.ts`: `sheets_config?` opsional. `.env.example`: 3 env baru.
+- `docs/SHEETS_SETUP.md`: panduan service account + rollout + uji E2E dummy.
+- `tests/sheets.test.ts`: 12 tes baru, total 26/26 lulus.
+- Verifikasi: tsc 0, eslint 0, build OK (`/api/cron/sheets-sync` terdaftar),
+  secret tidak di client/bundle, pola resolveAnswer sesuai viewer.
+- Rollout (user): Cloud project + service account + env → migration 010 →
+  deploy → uji form tes spreadsheet tes data DUMMY → aktifkan per form → backfill.
+
+---
+
 ## PRODUKSI (snapshot Fase 0, untuk konteks)
 
 - 7 forms (semua `form_type=recruitment`, `is_open=false`)

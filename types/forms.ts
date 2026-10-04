@@ -82,6 +82,13 @@ export interface Form {
   close_date: string;
   form_fields: FieldConfig[];
   settings: FormSettings;
+  // Fase 6: config mirror Google Sheets ({spreadsheet_id, sheet_name, enabled})
+  // atau null bila tanpa integrasi. Kolom JSONB migration 010.
+  sheets_config?: {
+    spreadsheet_id?: string;
+    sheet_name?: string;
+    enabled?: boolean;
+  } | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
