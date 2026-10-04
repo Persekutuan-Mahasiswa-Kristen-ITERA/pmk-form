@@ -74,9 +74,16 @@ Rollback aman tersedia di komentar akhir file (hanya menghapus objek baru;
   (satu INSERT murah) → sinkronisasi berjalan **setelah** respons dikirim ke
   pendaftar via `after()` (tidak menambah latency; kegagalan hanya jadi
   status outbox).
-- Retry otomatis tiap 5 menit via Vercel Cron (`vercel.json`) → endpoint
-  `/api/cron/sheets-sync` yang dilindungi `CRON_SECRET` (constant-time compare).
-  Backoff eksponensial 1→2→4→...→60 menit, maks 5 percobaan lalu `failed`.
+- Retry otomatis via endpoint `/api/cron/sheets-sync` yang dilindungi
+  `CRON_SECRET` (constant-time compare). Backoff eksponensial
+  1→2→4→...→60 menit, maks 5 percobaan lalu `failed`.
+  - **Vercel Cron bawaan (`vercel.json`): 1x sehari** (`0 18 * * *` = tiap
+    jam 18.00 UTC / 01.00 WIB). Paket Hobby hanya mengizinkan cron harian —
+    ekspresi yang lebih sering membuat **deployment gagal total**.
+    Sebagai jaring pengaman harian bila cron eksternal mati.
+  - **Retry cepat tiap 5 menit: pakai cron EKSTERNAL gratis** (lihat
+    "Retry cepat (opsional)" di bawah). Ini jalur utama retry — tanpa ini,
+    respons yang gagal sync menunggu sampai cron harian berikutnya.
 - Idempotensi: kolom terakhir sheet `__response_id` dicek sebelum append —
   retry tidak pernah membuat baris ganda. Outbox juga PK di `response_id`.
 - Keamanan tulis: mode **RAW** (tidak mengevaluasi formula) + escape nilai
@@ -85,6 +92,27 @@ Rollback aman tersedia di komentar akhir file (hanya menghapus objek baru;
 - Perubahan field form: tambah → kolom baru di kanan; hapus → kolom lama
   dipertahankan; rename → hanya header diperbarui. Data lama ber-key label
   tetap terbaca via fallback (`answers[field.id] ?? answers[field.label]`).
+
+## Retry cepat tiap 5 menit (opsional, gratis — cron eksternal)
+
+Vercel Cron paket Hobby hanya 1x sehari. Supaya respons yang gagal sync
+tidak menunggu sampai besok, daftarkan URL cron ke salah satu layanan gratis:
+
+- **cron-job.org** (gratis): buat akun → Create cronjob → URL:
+  `https://form.pmkitera.web.id/api/cron/sheets-sync` → Schedule every 5 minutes.
+- **GitHub Actions** (gratis, tanpa akun baru): workflow `schedule: '*/5 * * * *'`
+  yang `curl` URL cron.
+- **UptimeRobot/Uptime Kuma**: monitor HTTP tiap 5 menit ke URL cron
+  (efek sampingnya sekaligus health-check).
+
+Semua opsi memanggil dengan header wajib:
+
+```text
+Authorization: Bearer <isi CRON_SECRET yang sama dengan di Vercel>
+```
+
+Tanpa header ini endpoint menjawab 401. Respons sukses: `{"ok":true,
+"processed":N,"synced":N,...}` (hanya jumlah, tanpa PII).
 
 ## Yang TIDAK bisa diverifikasi otomatis
 
