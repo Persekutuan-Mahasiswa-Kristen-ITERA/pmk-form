@@ -67,6 +67,9 @@ export interface FormSettings {
   show_progress?: boolean;
   thank_you_message?: string;
   redirect_url?: string;
+  // Fase 7-2: aktifkan verifikasi Turnstile di submit publik.
+  // Default ON saat env Turnstile dikonfigurasi; false = opt-out per form.
+  require_captcha?: boolean;
   [key: string]: unknown; // Allow extra settings
 }
 

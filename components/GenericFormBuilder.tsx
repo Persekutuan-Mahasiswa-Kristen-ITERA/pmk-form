@@ -314,6 +314,22 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
               <Switch id="collect-id" checked={settings.collect_identity ?? true} onCheckedChange={(val) => setSettings({ ...settings, collect_identity: val })} />
               <Label htmlFor="collect-id" className="cursor-pointer">Kumpulkan Identitas Otomatis (Nama/NIM/Email/Prodi)</Label>
             </div>
+
+            {/* Fase 7-2: verifikasi anti-bot Cloudflare Turnstile di submit publik. */}
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="require-captcha"
+                checked={settings.require_captcha ?? true}
+                onCheckedChange={(val) => setSettings({ ...settings, require_captcha: val })}
+              />
+              <Label htmlFor="require-captcha" className="cursor-pointer">
+                Verifikasi Anti-Bot (Cloudflare Turnstile)
+              </Label>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-2">
+              Hanya berlaku jika site key Turnstile sudah dikonfigurasi (env server). Nonaktifkan
+              untuk form internal yang dipercaya.
+            </p>
           </CardContent>
         </Card>
       )}

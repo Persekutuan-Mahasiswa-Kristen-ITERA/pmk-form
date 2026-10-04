@@ -8,12 +8,16 @@ import { checkDuplicateResponse, isFormActive, resolveFormFields, normalizeNim }
 import { syncOne } from "@/lib/sheets/sync";
 import { buildFormSchema } from "@/lib/form-schema";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 import { revalidateFormAdminData } from "@/app/actions/revalidate";
 import type { FormSettings } from "@/types/forms";
 
 const SubmitInputSchema = z.object({
   formId: z.string().uuid(),
   answers: z.record(z.string(), z.unknown()),
+  // Fase 7-2: token Cloudflare Turnstile (sekali pakai). Wajib bila
+  // fitur captcha aktif untuk form ini; divalidasi ke Cloudflare di bawah.
+  turnstileToken: z.string().optional(),
 });
 
 /**
@@ -99,6 +103,7 @@ function scheduleSheetsSync(responseId: string): void {
 export async function submitFormResponseAction(input: {
   formId: string;
   answers: Record<string, unknown>;
+  turnstileToken?: string;
 }) {
   try {
     // Rate limit dasar per IP untuk menghambat spam/brute-force submit.
@@ -116,7 +121,7 @@ export async function submitFormResponseAction(input: {
     if (!parsed.success) {
       return { success: false as const, error: "Data tidak valid." };
     }
-    const { formId, answers } = parsed.data;
+    const { formId, answers, turnstileToken } = parsed.data;
 
     const supabase = createServiceClient();
 
@@ -142,6 +147,18 @@ export async function submitFormResponseAction(input: {
     // dilewati dengan memodifikasi payload client.
     const fields = resolveFormFields({ form_fields: form.form_fields, settings: form.settings });
     const settings = (form.settings ?? {}) as FormSettings;
+
+    // Fase 7-2: verifikasi Turnstile. Hanya bila fitur dikonfigurasi global
+    // (env) DAN diaktifkan per-form. Token divalidasi ke Cloudflare dengan
+    // SECRET KEY — client TIDAK bisa memalsukannya.
+    // !!! PENTING: kegagalan infrastruktur Cloudflare TIDAK menggagalkan submit
+    //     (lihat lib/turnstile.ts), tapi token kosong/expired TETAP ditolak.
+    if (settings.require_captcha !== false) {
+      const verify = await verifyTurnstileToken(turnstileToken, ip);
+      if (!verify.ok) {
+        return { success: false as const, error: verify.reason ?? "Verifikasi keamanan gagal." };
+      }
+    }
 
     // 2. Validate the answers against the field configuration.
     const formSchema = buildFormSchema(fields);
