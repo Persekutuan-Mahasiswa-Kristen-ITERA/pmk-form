@@ -6,6 +6,15 @@
  */
 
 /**
+ * Base REST Sheets API v4. Ditaruh di sini (bukan client.ts) supaya bisa
+ * diuji regresi tanpa menyentuh "server-only".
+ *
+ * !!! JANGAN ubah ke host /auth/... atau /upload/... — keduanya
+ * menghasilkan 404/HTML untuk endpoint values (bug fix/sheets-api-url).
+ */
+export const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
+
+/**
  * ESCAPE anti formula-injection.
  *
  * Sheets mode RAW sudah mencegah evaluasi formula, TAPI sebagai pertahanan

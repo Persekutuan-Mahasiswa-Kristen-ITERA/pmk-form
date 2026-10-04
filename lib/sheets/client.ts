@@ -1,7 +1,7 @@
 import "server-only";
 
 import { GoogleAuth } from "google-auth-library";
-import { buildHeader, sanitizeError } from "@/lib/sheets/format";
+import { buildHeader, sanitizeError, SHEETS_API } from "@/lib/sheets/format";
 
 /**
  * Klien Google Sheets (Fase 6-1).
@@ -18,8 +18,8 @@ import { buildHeader, sanitizeError } from "@/lib/sheets/format";
  */
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
-const SHEETS_API = "https://sheets.googleapis.com/auth/spreadsheets";
-const VALUES_BASE = "https://sheets.googleapis.com/upload/v1/spreadsheets";
+// NOTE: SHEETS_API diimpor dari format.ts agar bisa diuji regresi tanpa
+// menyentuh "server-only".
 
 export interface SheetsConfig {
   spreadsheet_id: string;
@@ -82,7 +82,7 @@ export {
   sanitizeError,
 } from "@/lib/sheets/format";
 
-// NOTE: re-export fungsi murni ada di bawah file (blok export).
+// NOTE: re-export SHEETS_API ada di bawah file (blok export).
 
 /**
  * Cek apakah response_id sudah ada di sheet (IDEMPOTENSI).
@@ -93,12 +93,11 @@ export {
 export async function rowExists(
   spreadsheetId: string,
   sheetName: string,
-  responseId: string,
-  maxRowsToScan = 500
+  responseId: string
 ): Promise<boolean> {
   const token = await getAccessToken();
   const range = encodeURIComponent(`${sheetName}!__response_id`);
-  const url = `${SHEETS_API.replace("/auth", "")}/v4/spreadsheets/${spreadsheetId}/values/${range}?maxResults=${maxRowsToScan}`;
+  const url = `${SHEETS_API}/${spreadsheetId}/values/${range}?majorDimension=COLUMNS`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
@@ -130,7 +129,7 @@ export async function ensureHeader(
   const token = await getAccessToken();
   const header = buildHeader(fields);
   const range = encodeURIComponent(`${sheetName}!A1`);
-  const url = `${VALUES_BASE}/${spreadsheetId}/values/${range}?valueInputOption=RAW`;
+  const url = `${SHEETS_API}/${spreadsheetId}/values/${range}?valueInputOption=RAW`;
   const res = await fetch(url, {
     method: "PUT",
     headers: {
@@ -159,14 +158,14 @@ export async function appendRows(
   if (rows.length === 0) return 0;
   const token = await getAccessToken();
   const range = encodeURIComponent(`${sheetName}!A:Z`);
-  const url = `${VALUES_BASE}/${spreadsheetId}/values/${range}:batchAppend?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+  const url = `${SHEETS_API}/${spreadsheetId}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
   const res = await fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ data: rows.map((r) => ({ range: `${sheetName}!A:Z`, values: [r] })) }),
+    body: JSON.stringify({ values: rows }),
     cache: "no-store",
   });
   if (!res.ok) {
