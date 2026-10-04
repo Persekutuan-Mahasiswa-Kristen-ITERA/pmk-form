@@ -2,8 +2,10 @@
 
 import { z } from "zod";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkDuplicateResponse, isFormActive, resolveFormFields, normalizeNim } from "@/lib/forms";
+import { syncOne } from "@/lib/sheets/sync";
 import { buildFormSchema } from "@/lib/form-schema";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { revalidateFormAdminData } from "@/app/actions/revalidate";
@@ -34,6 +36,66 @@ const SubmitInputSchema = z.object({
  * Returned errors are safe to display to the submitter; internal failures are
  * logged server-side instead.
  */
+/**
+ * Daftarkan respons ke outbox Google Sheets (Fase 6-3).
+ *
+ * Murah: satu INSERT. Bila form tidak punya sheets_config atau tabel
+ * outbox belum ada (migration 010 belum dijalankan), lewati diam-diam —
+ * kegagalan Sheets TIDAK PERNAH menggagalkan submit pendaftar.
+ */
+async function enqueueSheetsSync(
+  supabase: ReturnType<typeof createServiceClient>,
+  formId: string,
+  responseId: string,
+  sheetsConfig: unknown
+): Promise<void> {
+  // Hanya bila form terintegrasi & aktif.
+  if (!sheetsConfig || typeof sheetsConfig !== "object") return;
+  const cfg = sheetsConfig as { enabled?: unknown };
+  if (cfg.enabled !== true) return;
+
+  try {
+    const { error } = await supabase.from("sheets_outbox").insert({
+      response_id: responseId,
+      form_id: formId,
+      status: "pending",
+    });
+    if (error) {
+      // 42P01 (undefined_table) / 42703: migration 010 belum dijalankan.
+      // 23505 (unique_violation): baris sudah ada (idempoten) — bukan error.
+      if (error.code !== "23505") {
+        console.warn("sheets_outbox tidak tersedia; lewati sinkronisasi.", sanitizeForLog(error.code));
+      }
+    }
+  } catch (err) {
+    console.warn("Gagal mendaftarkan outbox Sheets (non-fatal).", err instanceof Error ? sanitizeForLog(err.message) : "unknown");
+  }
+}
+
+/** Ambil kode error pendek saja untuk log (bukan pesan DB lengkap). */
+function sanitizeForLog(value: string | undefined): string {
+  return (value ?? "unknown").slice(0, 60);
+}
+
+/**
+ * Jadwalkan sinkronisasi Sheets SETELAH respons dikirim ke pendaftar.
+ *
+ * `after()` Next.js menjalankan callback di latar belakang setelah response
+ * selesai — latency submit TIDAK bertambah. Callback selalu aman: syncOne()
+ * menangkap error Google dan hanya mengubah status outbox; .catch() di sini
+ * adalah pertahanan terakhir agar tidak ada unhandled rejection.
+ */
+function scheduleSheetsSync(responseId: string): void {
+  after(() => {
+    syncOne(responseId).catch((err) => {
+      console.warn(
+        "sinkronisasi Sheets after() gagal (non-fatal).",
+        err instanceof Error ? err.message.slice(0, 120) : "unknown"
+      );
+    });
+  });
+}
+
 export async function submitFormResponseAction(input: {
   formId: string;
   answers: Record<string, unknown>;
@@ -63,7 +125,7 @@ export async function submitFormResponseAction(input: {
     //    (sebelumnya hanya cek is_open + close_date).
     const { data: form, error: formError } = await supabase
       .from("forms")
-      .select("id, slug, is_open, open_date, close_date, form_fields, settings")
+      .select("id, slug, is_open, open_date, close_date, form_fields, settings, sheets_config")
       .eq("id", formId)
       .single();
 
@@ -151,6 +213,10 @@ export async function submitFormResponseAction(input: {
     //    Fase 3-5: nim_normalized diisi supaya unique PARTIAL index
     //    (migration 008) bisa menangkap race condition yang lolos dari cek
     //    aplikasi di langkah 4.
+    //
+    //    Fase 6-3: insert baris sheets_outbox bersamaan (murah, satu request).
+    //    Sinkronisasi best-effort dilakukan SETELAH respons dikirim ke user
+    //    (after()) — kegagalan Google tidak boleh menggagalkan submit.
     const { data: inserted, error: insertError } = await supabase
       .from("form_responses")
       .insert({
@@ -192,6 +258,10 @@ export async function submitFormResponseAction(input: {
           return { success: false as const, error: "Gagal menyimpan respons. Silakan coba lagi." };
         }
         await revalidateFormAdminData(formId);
+        // Fase 6-3: jalur fallback 008 tetap didaftarkan ke outbox + sync
+        // best-effort (perilaku sama dengan jalur utama).
+        await enqueueSheetsSync(supabase, formId, retry.data.id, form.sheets_config);
+        scheduleSheetsSync(retry.data.id as string);
         return { success: true as const, responseId: retry.data.id as string };
       }
       console.error("Gagal menyimpan respons", insertError?.message);
@@ -199,6 +269,14 @@ export async function submitFormResponseAction(input: {
     }
 
     await revalidateFormAdminData(formId);
+
+    // Fase 6-3: daftarkan ke outbox Sheets bila form punya konfigurasi.
+    // Bila migration 010 belum dijalankan (tabel tidak ada), lewati tanpa
+    // menggagalkan submit (42703/42P01 = undefined_column/undefined_table).
+    // Sinkronisasi best-effort via after(): tidak menambah latency submit,
+    // dan kegagalan Google hanya mengubah status outbox.
+    await enqueueSheetsSync(supabase, formId, inserted.id, form.sheets_config);
+    scheduleSheetsSync(inserted.id as string);
 
     return { success: true as const, responseId: inserted.id as string };
   } catch (err) {
