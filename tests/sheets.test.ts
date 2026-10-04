@@ -9,6 +9,9 @@ import {
   backoffMinutes,
   parseSpreadsheetId,
 } from "@/lib/sheets/format";
+// SHEETS_API tinggal di format.ts (bukan client.ts yang "server-only")
+// supaya bisa diuji regresi tanpa memicu error server-only.
+import { SHEETS_API } from "@/lib/sheets/format";
 
 /**
  * Tes unit Fase 6-6 (Sheets API asli TIDAK disentuh — hanya fungsi murni).
@@ -16,6 +19,14 @@ import {
  * Mencakup: mapping baris, escape formula-injection, idempotensi
  * (kolom __response_id), backoff, dan sanitasi error tanpa PII/secret.
  */
+
+// --- regresi URL API (bug fix/sheets-api-url) ---
+
+test("SHEETS_API: base REST v4 yang valid (bukan /auth/... atau /upload/...)", () => {
+  assert.equal(SHEETS_API, "https://sheets.googleapis.com/v4/spreadsheets");
+  assert.ok(!SHEETS_API.includes("/auth"), "tidak boleh memuat /auth");
+  assert.ok(!SHEETS_API.includes("/upload"), "tidak boleh memuat /upload");
+});
 
 // --- escape formula injection (RAW + pertahanan ganda) ---
 
