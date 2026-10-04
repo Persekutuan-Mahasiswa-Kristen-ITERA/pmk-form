@@ -38,20 +38,22 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 24 diperlukan: tes unit memakai file .ts langsung (type
+          # stripping bawaan). Node 20 menolak ekstensi .ts.
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
       # Placeholder env agar `next build` tidak crash pada pembacaan env
-      # publik. NILAI INI BUKAN KREDENSIAL ASLI (dummy acak).
+      # publik. NILAI INI BUKAN KREDENSIAL ASLI (dummy pendek, cukup hadir).
       - name: Build env placeholders
         run: |
           {
             echo "NEXT_PUBLIC_SUPABASE_URL=https://ci-placeholder.supabase.co"
-            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ci1wbGFjZWhvbGRlci1hbm9uLWtleS1kdW1teQ.placeholder"
-            echo "SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ci1wbGFjZWhvbGRlci1zZXJ2aWNlLWtleS1kdW1teQ.placeholder"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-placeholder-anon-key"
+            echo "SUPABASE_SERVICE_ROLE_KEY=ci-placeholder-service-key"
           } > .env
 
       - name: Type check (tsc)
