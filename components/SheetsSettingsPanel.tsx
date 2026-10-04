@@ -116,9 +116,9 @@ export function SheetsSettingsPanel({
     startTransition(async () => {
       const res = await backfillSyncAction(formId);
       toast({
-        title: res.success ? "Backfill dijadwalkan" : "Gagal",
+        title: res.success ? "Backfill selesai" : "Gagal",
         description: res.success
-          ? `${res.count} respons dimasukkan ke antrian. Sinkronisasi diproses di latar belakang.`
+          ? `${res.count} respons diperiksa; ${res.synced} baris dikirim ke sheet. Baris yang sudah ada tidak ditulis ulang (idempoten).`
           : res.error,
         variant: res.success ? "default" : "destructive",
       });

@@ -6,6 +6,7 @@ import {
   ensureHeader,
   appendRows,
   rowExists,
+  readExistingIds,
 } from "@/lib/sheets/client";
 import { buildRow, sanitizeError, backoffMinutes } from "@/lib/sheets/format";
 import type { FieldConfig } from "@/types/forms";
@@ -125,6 +126,119 @@ async function markSynced(
       synced_at: new Date().toISOString(),
     })
     .eq("response_id", responseId);
+}
+
+/**
+ * Sinkronkan SEMUA baris pending satu form dalam SATU panggilan append.
+ *
+ * Dipakai backfill (tombol "Sinkronkan Semua Respons") dan retry. Paket
+ * Hobby hanya mendukung cron harian, jadi backfill tidak boleh menunggu
+ * cron — pemrosesan harus langsung. Ratusan respons = 1 request ke Google
+ * (plus 1 baca idempotensi + 1 tulis header).
+ *
+ * Idempoten: response_id yang sudah ada di sheet dilewati (readExistingIds).
+ */
+export async function syncFormBatch(formId: string): Promise<{
+  processed: number;
+  synced: number;
+  error?: string;
+}> {
+  const supabase = createServiceClient();
+
+  // Ambil form + config.
+  const { data: form, error: formError } = await supabase
+    .from("forms")
+    .select("id, form_fields, sheets_config")
+    .eq("id", formId)
+    .single();
+  if (formError || !form) {
+    return { processed: 0, synced: 0, error: "Form tidak ditemukan." };
+  }
+
+  const cfg = getSheetsConfig(form);
+  if (!cfg || !cfg.enabled) {
+    return { processed: 0, synced: 0, error: "Integrasi Sheets tidak aktif untuk form ini." };
+  }
+
+  // Ambil SEMUA baris outbox form ini yang masih perlu dikirim.
+  const { data: pending, error: pendingError } = await supabase
+    .from("sheets_outbox")
+    .select("response_id, attempts")
+    .eq("form_id", formId)
+    .in("status", ["pending", "failed"])
+    .order("created_at", { ascending: true })
+    .limit(500);
+  if (pendingError || !pending || pending.length === 0) {
+    return { processed: 0, synced: 0 };
+  }
+
+  // Ambil respons yang bersangkutan.
+  const responseIds = pending.map((p) => p.response_id);
+  const { data: responses, error: respError } = await supabase
+    .from("form_responses")
+    .select("id, answers")
+    .in("id", responseIds)
+    .order("submitted_at", { ascending: true });
+  if (respError || !responses) {
+    return { processed: responseIds.length, synced: 0, error: "Gagal memuat respons." };
+  }
+
+  const fields = (form.form_fields ?? []) as FieldConfig[];
+
+  try {
+    // Header dulu (idempoten), lalu kumpulkan id yang sudah ada di sheet.
+    await ensureHeader(cfg.spreadsheet_id, cfg.sheet_name, fields);
+    const existing = await readExistingIds(cfg.spreadsheet_id, cfg.sheet_name);
+
+    // Baris yang belum ada di sheet.
+    const toSync = responses.filter((r) => !existing.has(r.id));
+    const syncedNow: string[] = [];
+
+    if (toSync.length > 0) {
+      const rows = toSync.map((r) => buildRow(fields, r.answers ?? {}, r.id));
+      await appendRows(cfg.spreadsheet_id, cfg.sheet_name, rows);
+      syncedNow.push(...toSync.map((r) => r.id));
+    }
+
+    // Baris yang sudah ada di sheet langsung ditandai synced (cek ulang).
+    const alreadyThere = responses.filter((r) => existing.has(r.id)).map((r) => r.id);
+    const markIds = [...syncedNow, ...alreadyThere];
+
+    if (markIds.length > 0) {
+      await supabase
+        .from("sheets_outbox")
+        .update({
+          status: "synced",
+          last_error: null,
+          next_attempt_at: null,
+          synced_at: new Date().toISOString(),
+        })
+        .in("response_id", markIds);
+    }
+
+    return { processed: responseIds.length, synced: markIds.length };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Kesalahan tak dikenal.";
+    const nextAttempt = (pending[0]?.attempts ?? 0) + 1;
+    const exhausted = nextAttempt >= MAX_ATTEMPTS;
+
+    await supabase
+      .from("sheets_outbox")
+      .update({
+        status: exhausted ? "failed" : "pending",
+        attempts: nextAttempt,
+        last_error: sanitizeError(message),
+        next_attempt_at: exhausted ? null : new Date(Date.now() + backoffMinutes(nextAttempt) * 60_000).toISOString(),
+        synced_at: null,
+      })
+      .in("response_id", responseIds);
+
+    return {
+      processed: responseIds.length,
+      synced: 0,
+      error: sanitizeError(message),
+    };
+  }
 }
 
 /**

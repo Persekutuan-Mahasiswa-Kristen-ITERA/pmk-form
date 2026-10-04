@@ -99,31 +99,50 @@ export {
 // NOTE: re-export SHEETS_API ada di bawah file (blok export).
 
 /**
- * Cek apakah response_id sudah ada di sheet (IDEMPOTENSI).
+ * Baca semua response_id yang sudah ada di sheet (IDEMPOTENSI).
  *
- * Baca kolom __response_id (kolom terakhir). Saat retry, jika id sudah ada,
- * append DILEWATI — tidak ada baris ganda.
+ * Satu panggilan API untuk seluruh sheet (efisien untuk backfill ratusan
+ * baris), alih-alih mengecek per baris. __response_id selalu kolom
+ * TERAKHIR (lihat buildHeader di format.ts).
  */
-export async function rowExists(
+export async function readExistingIds(
   spreadsheetId: string,
-  sheetName: string,
-  responseId: string
-): Promise<boolean> {
+  sheetName: string
+): Promise<Set<string>> {
   const token = await getAccessToken();
-  const range = encodeURIComponent(`${sheetName}!__response_id`);
-  const url = `${SHEETS_API}/${spreadsheetId}/values/${range}?majorDimension=COLUMNS`;
+  const range = encodeURIComponent(`${sheetName}!A:Z`);
+  const url = `${SHEETS_API}/${spreadsheetId}/values/${range}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
   if (!res.ok) {
-    // Range belum ada (sheet masih kosong / header belum dibuat) -> belum ada.
-    if (res.status === 400 || res.status === 404) return false;
+    // Range belum ada (sheet masih kosong / header belum dibuat) -> kosong.
+    if (res.status === 400 || res.status === 404) return new Set();
     throw new Error(`Sheets get gagal: HTTP ${res.status}`);
   }
   const data = (await res.json()) as { values?: string[][] };
-  const ids = (data.values ?? []).flat();
-  return ids.includes(responseId);
+  const rows = data.values ?? [];
+  if (rows.length === 0) return new Set();
+
+  const idCol = rows[0].length - 1; // kolom terakhir = __response_id
+  if (idCol < 0) return new Set();
+
+  const ids = new Set<string>();
+  for (let i = 1; i < rows.length; i += 1) {
+    const cell = rows[i][idCol];
+    if (typeof cell === "string" && cell !== "") ids.add(cell);
+  }
+  return ids;
+}
+
+/** Wrapper satu-id (dipakai syncOne untuk respons baru). */
+export async function rowExists(
+  spreadsheetId: string,
+  sheetName: string,
+  responseId: string
+): Promise<boolean> {
+  return (await readExistingIds(spreadsheetId, sheetName)).has(responseId);
 }
 
 /**
