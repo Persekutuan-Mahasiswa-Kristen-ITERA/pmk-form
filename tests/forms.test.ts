@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isFormActive, resolveFormFields, normalizeNim } from "@/lib/forms";
+import { isFormActive, resolveFormFields, normalizeNim, duplicateSlugCandidate } from "@/lib/forms";
 import type { FieldConfig } from "@/types/forms";
 
 test("isFormActive: hanya true bila is_open + rentang tanggal valid", () => {
@@ -42,4 +42,17 @@ test("resolveFormFields: tidak gandakan field identitas yang sudah ada", () => {
 test("normalizeNim: konsisten trim + upper + buang non-alfanumerik", () => {
   assert.equal(normalizeNim("  a1b2-c3.d4 "), "A1B2C3D4");
   assert.equal(normalizeNim("121140001"), "121140001");
+});
+
+// Fase 7-4: logika nama slug duplikasi (dites tanpa DB).
+test("duplicateSlugCandidate: urutan slug-copy, slug-copy-2, slug-copy-3", () => {
+  assert.equal(duplicateSlugCandidate("oprec", 1), "oprec-copy");
+  assert.equal(duplicateSlugCandidate("oprec", 2), "oprec-copy-2");
+  assert.equal(duplicateSlugCandidate("oprec", 5), "oprec-copy-5");
+  assert.equal(duplicateSlugCandidate("oprec", 0), "oprec-copy");
+});
+
+test("duplicateSlugCandidate: slug dengan tanda hubung tetap utuh", () => {
+  assert.equal(duplicateSlugCandidate("form-panjang-1", 1), "form-panjang-1-copy");
+  assert.equal(duplicateSlugCandidate("form-panjang-1", 3), "form-panjang-1-copy-3");
 });

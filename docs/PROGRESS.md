@@ -425,7 +425,36 @@ Yang dilakukan:
 yang membaca `form_responses.status` + label per form. Karena semua form
 produksi sudah tutup, tidak ada urgensi.
 
-**Rollout**: jalankan migration 011 ke produksi SEBELU merge/deploy.
+**Rollout (WAJIB sebelum/sesudah merge)**:
+1. Jalankan migration 011 ke produksi (sudah terverifikasi idempoten).
+2. Merge/deploy kode.
+3. Status langsung dapat dipakai di tabel respons admin. Bila migration
+   belum jalan, UI menampilkan pesan jelas (bukan crash).
+
+**Status merge**: PR #14 (Turnstile) & PR #15 (status respons) SAMA-SAMA sudah
+merged ke cabang utama. Branch lokal yang sudah merged sudah dibersihkan
+(sisa: `chore/cleanup-and-hardening`, belum fully merged).
+
+### Item 4: Duplikasi form (branch `feat/duplikasi-form`)
+
+Salin konfigurasi form (judul, deskripsi, tipe, fields, settings) ke form
+baru dengan 1 tombol di kartu admin. Tujuan: membuat form baru untuk periode
+baru (mis. OPREC 2026) tinggal duplikasi form lama + edit, bukan dari nol.
+
+- `lib/forms.ts`: `duplicateForm(sourceId)` — ambil form sumber, cari slug
+  unik otomatis (`slug-copy`, `slug-copy-2`, ...), insert form baru.
+  **`is_open` SELALU false** di duplikat (harus dibuka manual setelah
+  diperiksa). `sheets_config` sengaja **TIDAK disalin** (dua form menulis ke
+  1 spreadsheet = kacau; admin atur sendiri di panel Sheets).
+  `duplicateSlugCandidate()` dipisah jadi fungsi murni agar bisa dites unit.
+- `app/actions/forms.ts`: `duplicateFormAction` (requireAdmin via lib,
+  revalidate, kembalikan form baru).
+- `components/FormQuickActions.tsx`: tombol `Copy` — setelah sukses, admin
+  langsung diarahkan ke halaman edit form baru + toast peringatan "periksa
+  dulu sebelum dibuka".
+- **Respons TIDAK disalin** — duplikat selalu kosong (aman dihapus bila salah).
+- Tidak butuh migration (hanya insert baris baru di tabel `forms`).
+- Verifikasi: tsc 0, eslint 0, build OK, 41/41 tes (2 baru untuk logika slug).
 
 ---
 

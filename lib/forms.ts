@@ -314,6 +314,91 @@ export async function deleteForm(id: string): Promise<void> {
   if (error) throw new Error(`Gagal menghapus form: ${error.message}`);
 }
 
+/**
+ * Nama kandidat slug untuk duplikasi form (Fase 7-4).
+ *
+ * Dipisah dari duplicateForm supaya logika unik-bisa-dites tanpa DB:
+ * `slug-copy` -> `slug-copy-2` -> `slug-copy-3` ...
+ */
+export function duplicateSlugCandidate(sourceSlug: string, attempt: number): string {
+  if (attempt <= 1) return `${sourceSlug}-copy`;
+  return `${sourceSlug}-copy-${attempt}`;
+}
+
+/**
+ * Duplikasi form (admin) — Fase 7 item 4.
+ *
+ * Salin konfigurasi form (judul, deskripsi, tipe, fields, settings,
+ * sheets_config) ke form BARU. HANYA konfigurasi — respons TIDAK disalin
+ * (form hasil duplikasi selalu kosong, jadi aman dihapus bila salah).
+ *
+ * Yang TIDAK disalin (sengaja):
+ *  - id, created_at, updated_at, created_by -> dibuat baru oleh DB.
+ *  - is_open -> SELALU false. Duplikat harus dibuka manual setelah diperiksa
+ *    (mencegah form belum diperiksa tiba-tiba publik + landings tak terduga).
+ *  - form_responses -> lihat atas.
+ *
+ * Slug: dibuat unik otomatis dari slug sumber (`slug-copy`, `slug-copy-2`,
+ * ...) karena kolom `slug` UNIQUE. Fungsi ini mencari slot pertama yang bebas.
+ */
+export async function duplicateForm(sourceId: string): Promise<Form> {
+  await requireAdmin();
+
+  const supabase = await createClient();
+
+  // Ambil form sumber lengkap (termasuk sheets_config hasil migration 010).
+  const { data: source, error: fetchError } = await supabase
+    .from("forms")
+    .select(
+      "title, description, slug, form_type, open_date, close_date, form_fields, settings, sheets_config"
+    )
+    .eq("id", sourceId)
+    .maybeSingle();
+
+  if (fetchError) throw new Error(`Gagal mengambil form: ${fetchError.message}`);
+  if (!source) throw new Error("Form tidak ditemukan.");
+
+  // Cari slug unik: slug-copy, slug-copy-2, ... (slug UNIQUE constraint).
+  let candidateSlug = duplicateSlugCandidate(source.slug, 1);
+  let attempt = 2;
+  for (;;) {
+    const { data: existing } = await supabase
+      .from("forms")
+      .select("id")
+      .eq("slug", candidateSlug)
+      .maybeSingle();
+
+    if (!existing) break;
+    candidateSlug = duplicateSlugCandidate(source.slug, attempt);
+    attempt += 1;
+  }
+
+  const { data, error } = await supabase
+    .from("forms")
+    .insert({
+      title: `${source.title} (Salinan)`,
+      description: source.description,
+      slug: candidateSlug,
+      form_type: source.form_type,
+      // Duplikat selalu ditutup sampai diperiksa admin (lihat docstring).
+      is_open: false,
+      open_date: source.open_date,
+      close_date: source.close_date,
+      form_fields: source.form_fields ?? [],
+      settings: source.settings ?? {},
+      // sheets_config disalin? Ya: admin sudah mengatur spreadsheet untuk
+      // form serupa. Tapi spreadsheetnya SAMA — respons 2 form akan menulis
+      // ke 1 sheet. Itu biasanya TIDAK diinginkan, jadi kita KOSONGKAN
+      // duplikat (admin atur sendiri di panel Sheets). Aman default.
+      sheets_config: null,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Gagal menduplikasi form: ${error.message}`);
+  return data as Form;
+}
+
 // ==========================================
 // FORM RESPONSES — CRUD service
 // ==========================================
