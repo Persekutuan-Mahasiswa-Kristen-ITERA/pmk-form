@@ -27,6 +27,9 @@ yarn-error.log*
 # semua file log (build.log, dev.log, dll.) tidak boleh masuk repo
 *.log
 
+# pi agent
+.pi/
+
 # local env files
 .env
 .env*.local
