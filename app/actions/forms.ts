@@ -7,6 +7,7 @@ import {
   deleteForm,
   duplicateForm,
 } from "@/lib/forms";
+import { audit, auditBestEffort } from "@/lib/audit";
 import { revalidateFormAdminData, revalidateForm } from "@/app/actions/revalidate";
 import type { Form } from "@/types/forms";
 
@@ -19,6 +20,8 @@ type FormPayload = Omit<Form, "id" | "created_at" | "updated_at">;
 export async function createFormAction(payload: FormPayload) {
   try {
     const data = await createForm(payload);
+    // Audit: create form sensitif -> audit() (wajib tercatat, lempar bila gagal).
+    await audit("form_create", { id: data.id, slug: payload.slug, title: payload.title });
     await revalidateForm(payload.slug);
     return { success: true as const, data };
   } catch (err) {
@@ -29,6 +32,8 @@ export async function createFormAction(payload: FormPayload) {
 export async function updateFormAction(id: string, payload: Partial<FormPayload>) {
   try {
     const data = await updateForm(id, payload);
+    // Audit: log field yang berubah (slug lama untuk jejak rename).
+    await audit("form_update", { id, changed: Object.keys(payload) });
     if (payload.slug) await revalidateForm(payload.slug);
     return { success: true as const, data };
   } catch (err) {
@@ -41,6 +46,9 @@ export async function updateFormAction(id: string, payload: Partial<FormPayload>
 export async function toggleFormOpenAction(id: string, isOpen: boolean) {
   try {
     await toggleFormOpen(id, isOpen);
+    // Best-effort: toggle adalah aksi ringan; audit gagal tak boleh
+    // membuat form terkunci. Detail minimal (tidak bocor data responden).
+    await auditBestEffort("form_toggle", { id, is_open: isOpen });
     await revalidateFormAdminData();
     return { success: true as const };
   } catch (err) {
@@ -53,6 +61,8 @@ export async function toggleFormOpenAction(id: string, isOpen: boolean) {
 export async function deleteFormAction(id: string) {
   try {
     await deleteForm(id);
+    // Audit: delete form sensitif -> audit() (lempar bila gagal).
+    await audit("form_delete", { id });
     await revalidateFormAdminData();
     return { success: true as const };
   } catch (err) {
@@ -66,6 +76,8 @@ export async function deleteFormAction(id: string) {
 export async function duplicateFormAction(id: string) {
   try {
     const data = await duplicateForm(id);
+    // Audit: catat kedua id supaya jejak hubungan asal<->salinan jelas.
+    await audit("form_duplicate", { from: id, to: data.id, slug: data.slug });
     await revalidateFormAdminData();
     return { success: true as const, data };
   } catch (err) {
