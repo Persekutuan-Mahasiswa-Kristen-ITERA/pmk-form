@@ -1,6 +1,7 @@
 "use server";
 
 import { deleteFormResponse } from "@/lib/forms";
+import { audit } from "@/lib/audit";
 import { revalidateFormAdminData } from "@/app/actions/revalidate";
 
 /**
@@ -12,6 +13,10 @@ import { revalidateFormAdminData } from "@/app/actions/revalidate";
 export async function deleteFormResponseAction(responseId: string, formId: string) {
   try {
     await deleteFormResponse(responseId);
+    // Audit: delete respons sensitif (data PII hilang) -> audit() wajib.
+    // Detail minimal: hanya id, bukan jawaban (detail jsonb ikut terlihat
+    // oleh admin lain yang membuka halaman audit).
+    await audit("response_delete", { response_id: responseId, form_id: formId });
     await revalidateFormAdminData(formId);
     return { success: true as const };
   } catch (err) {

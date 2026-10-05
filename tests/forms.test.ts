@@ -56,3 +56,19 @@ test("duplicateSlugCandidate: slug dengan tanda hubung tetap utuh", () => {
   assert.equal(duplicateSlugCandidate("form-panjang-1", 1), "form-panjang-1-copy");
   assert.equal(duplicateSlugCandidate("form-panjang-1", 3), "form-panjang-1-copy-3");
 });
+
+// Fase 7-5: audit helper memanggil createClient() -> stub melempar error
+// eksplisit. Tes ini memastikan helper TIDAK menelan error diam-diam:
+// audit() melempar (sesuai kontrak "wajib tercatat"), auditBestEffort() tidak.
+test("audit(): helper pure tidak menelan error DB", async () => {
+  await assert.rejects(
+    () => import("@/lib/audit").then((m) => m.audit("form_create")),
+    /createClient\(\) dipanggil dalam tes unit/
+  );
+});
+
+test("auditBestEffort(): menelan error DB (best-effort)", async () => {
+  const m = await import("@/lib/audit");
+  // Tidak melempar — jika tidak, aksi utama akan gagal hanya karena audit gagal.
+  await m.auditBestEffort("form_toggle", { id: "x" });
+});

@@ -456,6 +456,37 @@ baru (mis. OPREC 2026) tinggal duplikasi form lama + edit, bukan dari nol.
 - Tidak butuh migration (hanya insert baris baru di tabel `forms`).
 - Verifikasi: tsc 0, eslint 0, build OK, 41/41 tes (2 baru untuk logika slug).
 
+### Item 5: Audit log diperluas (branch `feat/audit-log`)
+
+Perluas `admin_audit_log` (Fase 5, hanya aksi admin-members) ke SEMUA aksi
+admin penting, + halaman viewer.
+
+- `migrations/012_expand_audit_log.sql` (non-destruktif): longgarkan CHECK
+  constraint `admin_audit_log_action_check` (drop+add, data lama tetap valid)
+  untuk menerima aksi baru: `form_create`, `form_update`, `form_delete`,
+  `form_duplicate`, `form_toggle`, `response_delete`,
+  `response_status_update`, `sheets_config_save`. Tambah index
+  `idx_admin_audit_log_created_at`. **Append-only tetap** — tidak ada policy
+  UPDATE/DELETE (baris tak bisa diubah/dihapus). Tervalidasi Postgres 17
+  isolated: aksi invalid ditolak, data lama utuh, idempoten 2x.
+- `lib/audit.ts` (server-only): `audit()` (wajib, lempar bila gagal),
+  `auditBestEffort()` (menelan error untuk aksi ringan), `getAuditLog()`.
+  **Actor diambil dari sesi server**, bukan payload client — admin tidak bisa
+  mencatat aksi atas nama admin lain.
+- `app/actions/adminMembers.ts`: fungsi audit lokal diganti dengan
+  `lib/audit` terpusat (implementasi sama, duplikasi dihilangkan).
+- Aksi teraudit: `forms.ts` (create/update/delete/duplicate/toggle),
+  `deleteResponse.ts` (response_delete), `responseStatus.ts`
+  (response_status_update, bulk catat jumlah), `sheetsConfig.ts`
+  (sheets_config_save).
+  - Detail minimal, tidak membocorkan jawaban responden (mis. hanya id form,
+    tidak ada NIM/nama). Aksi delete memakai `audit()` (wajib); toggle &
+    status respons memakai `auditBestEffort` (aksi ringan).
+- `app/admin/(dashboard)/audit/page.tsx`: tabel viewer super_admin-only
+  (waktu, aksi, oleh, target, detail) + nav link "Audit Log" di layout.
+- Verifikasi: tsc 0, eslint 0, build OK (route `/admin/audit` muncul),
+  43/43 tes (2 baru memastikan kontrak error helper audit).
+
 ---
 
 ## PRODUKSI (snapshot Fase 0, untuk konteks)

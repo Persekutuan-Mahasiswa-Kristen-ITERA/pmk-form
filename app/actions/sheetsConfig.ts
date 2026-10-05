@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { audit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { testConnection } from "@/lib/sheets/client";
 import { syncFormBatch } from "@/lib/sheets/sync";
@@ -75,6 +76,14 @@ export async function saveSheetsConfigAction(formId: string, input: Partial<Shee
   if (error) return { success: false as const, error: "Gagal menyimpan konfigurasi." };
 
   revalidatePath(`/admin/forms/${formId}`);
+  // Audit: sheets config mengatur ke mana data PII dikirim -> audit() wajib.
+  // Detail: hanya toggle + ada/tidak-nya spreadsheet id, bukan URL/nilai
+  // rahasia apa pun.
+  await audit("sheets_config_save", {
+    form_id: formId,
+    enabled: parsed.data.enabled,
+    has_spreadsheet_id: !!parsed.data.spreadsheet_id,
+  });
   return { success: true as const };
 }
 

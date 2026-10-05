@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { auditBestEffort } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import type { ResponseStatus } from "@/types/forms";
 
@@ -57,6 +58,13 @@ export async function updateResponseStatusAction(input: UpdateStatusInput) {
   }
 
   revalidatePath(`/admin/forms/${formId}/responses`);
+  // Audit: status menentukan hasil seleksi responden (PII-adjacent).
+  // Best-effort via useTransition di UI; per-baris -> auditBestEffort.
+  await auditBestEffort("response_status_update", {
+    response_id: responseId,
+    form_id: formId,
+    status,
+  });
   return { success: true as const };
 }
 
@@ -99,5 +107,11 @@ export async function bulkUpdateStatusAction(
   }
 
   revalidatePath(`/admin/forms/${formId}/responses`);
+  // Audit bulk: catat jumlah + status, bukan setiap id (baris bisa ratusan).
+  await auditBestEffort("response_status_update", {
+    form_id: formId,
+    count: responseIds.length,
+    status,
+  });
   return { success: true as const, count: responseIds.length };
 }
