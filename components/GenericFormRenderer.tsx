@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { uploadFormAttachment } from "@/app/actions/uploadFile";
 import { submitFormResponseAction } from "@/app/actions/submitResponse";
+import { TurnstileWidget } from "./TurnstileWidget";
 import { FormFieldRenderer } from "./FormFieldRenderer";
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,13 @@ function toRendererConfig(f: FieldConfig): import("./FormFieldRenderer").FieldCo
 export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  // Fase 7-2: Turnstile aktif hanya jika dikonfigurasi global (env) DAN
+  // diaktifkan per-form (settings.require_captcha !== false).
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const captchaEnabled =
+    !!turnstileSiteKey && genericForm.settings?.require_captcha !== false;
 
   const fields: FieldConfig[] = genericForm.form_fields || [];
   const rendererFields = fields.map(toRendererConfig);
@@ -133,6 +141,7 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
       const result = await submitFormResponseAction({
         formId: genericForm.id,
         answers,
+        turnstileToken: captchaEnabled ? (turnstileToken ?? undefined) : undefined,
       });
 
       if (!result.success) {
@@ -196,6 +205,12 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
                 rendererFields.map((rf) => (
                   <FormFieldRenderer key={rf.id} fieldConfig={rf} control={form.control} />
                 ))
+              )}
+
+              {captchaEnabled && (
+                <div className="pt-2">
+                  <TurnstileWidget siteKey={turnstileSiteKey as string} onToken={setTurnstileToken} />
+                </div>
               )}
 
               <div className="pt-8">

@@ -12,6 +12,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const STUBS = {
   "next/headers": path.join(REPO, "tests", "stubs", "next-headers.mjs"),
   "@/lib/supabase/server": path.join(REPO, "tests", "stubs", "supabase-server.mjs"),
+  "server-only": path.join(REPO, "tests", "stubs", "server-only.mjs"),
   "react": path.join(REPO, "tests", "stubs", "react.mjs"),
 };
 
