@@ -487,6 +487,40 @@ admin penting, + halaman viewer.
 - Verifikasi: tsc 0, eslint 0, build OK (route `/admin/audit` muncul),
   43/43 tes (2 baru memastikan kontrak error helper audit).
 
+### Item 6: Soft delete form + halaman sampah (branch `feat/soft-delete-form`)
+
+Sebelumnya form berisi respons TIDAK BISA dihapus sama sekali (Fase 4C,
+hard-delete ditolak). Sekarang bisa dihapus dengan aman via soft delete:
+
+- `migrations/013_soft_delete_form.sql` (non-destruktif): kolom
+  `forms.is_deleted boolean NOT NULL DEFAULT false` + `deleted_at timestamptz`.
+  Data lama semua false (tidak ada yang tiba-tiba "dihapus"). 2 partial index:
+  `idx_forms_active` (baris tidak dihapus) & `idx_forms_deleted` (sampah).
+  Tervalidasi Postgres 17 isolated: default benar, idempoten 2x.
+- `lib/forms.ts`:
+  - `deleteForm()`: form **PUNYA respons** -> soft delete (is_deleted=true,
+    sembunyikan, data utuh); form **KOSONG** -> hard delete (seperti Fase 4C).
+    Mengembalikan `{ softDeleted }`.
+  - `restoreForm()` baru: batalkan soft delete.
+  - **Semua 6 query baca memfilter `is_deleted = false`**: `getOpenForms`,
+    `countOpenForms`, `getFormBySlug` (public), `getFormById`, `getAllForms`,
+    `countActiveForms` (admin). `getAllForms` dapat opsi `includeDeleted`
+    untuk halaman sampah.
+- `types/forms.ts`: `Form.is_deleted?` + `Form.deleted_at?`.
+- `app/actions/forms.ts`: `deleteFormAction` (kembalikan `softDeleted`, audit
+  catat soft/hard) + `restoreFormAction` baru.
+- `components/FormQuickActions.tsx`: tombol hapus sekarang aktif untuk form
+  berisi respons (sebelumnya dikunci). Pesan jelas bedakan soft/hard delete.
+- `components/TrashFormsClient.tsx` + `app/admin/(dashboard)/forms/trash/page.tsx`:
+  halaman sampah (daftar form terhapus + jumlah respons + tombol Kembalikan).
+- Link "Sampah" di halaman daftar form.
+- Verifikasi: tsc 0, eslint 0, build OK (route `/admin/forms/trash` muncul),
+  43/43 tes.
+
+**Rollout**: jalankan migration 013 ke produksi (default false, aman) sebelum
+merge/deploy. Bila belum jalan, query baca akan error 42703 (undefined_column)
+-> halaman form gagal load. Pastikan migration jalan DULU.
+
 ---
 
 ## PRODUKSI (snapshot Fase 0, untuk konteks)

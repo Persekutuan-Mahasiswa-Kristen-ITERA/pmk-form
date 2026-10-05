@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Lock, Trash2, Copy } from "lucide-react";
+import { Trash2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   toggleFormOpenAction,
@@ -15,9 +15,9 @@ import { useRouter } from "next/navigation";
  * Aksi cepat kartu admin (Fase 4C).
  *
  * - Toggle buka/tutup 1-klik (tanpa buka halaman edit).
- * - Hapus form dengan konfirmasi ganda; server MENOLAK bila form punya
- *   respons (lihat deleteForm di lib/forms.ts) — tombol dikunci untuk form
- *   berisi respons agar admin tidak salah pencet.
+ * - Hapus form dengan konfirmasi ganda. Form berisi respons di-SOFT DELETE
+ *   (Fase 7-6): disembunyikan dari dashboard, data tetap aman; bisa
+ *   dikembalikan dari halaman sampah. Form kosong di-hard delete.
  */
 export function FormQuickActions({
   formId,
@@ -58,9 +58,14 @@ export function FormQuickActions({
       const res = await deleteFormAction(formId);
       toast({
         title: res.success ? "Berhasil" : "Gagal",
-        description: res.success ? "Form dihapus." : res.error,
+        description: res.success
+          ? res.softDeleted
+            ? "Form disembunyikan (soft delete). Data tetap aman; bisa dikembalikan dari sampah."
+            : "Form dihapus permanen."
+          : res.error,
         variant: res.success ? "default" : "destructive",
       });
+      if (res.success) router.refresh();
     });
 
   const handleDuplicate = () =>
@@ -107,28 +112,22 @@ export function FormQuickActions({
         <Copy className="w-3.5 h-3.5" />
       </Button>
 
-      {hasResponses ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground"
-          disabled
-          title={`Form memiliki ${responseCount} respons — tidak dapat dihapus. Tutup form sebagai gantinya.`}
-        >
-          <Lock className="w-3.5 h-3.5" />
-        </Button>
-      ) : (
-        <Button
-          variant="ghost"
-          size="icon"
-          className={`h-8 w-8 ${confirming ? "text-destructive" : "text-muted-foreground hover:text-destructive"}`}
-          disabled={pending}
-          onClick={handleDelete}
-          title={confirming ? "Klik sekali lagi untuk konfirmasi hapus" : "Hapus form (kosong, tanpa respons)"}
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </Button>
-      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className={`h-8 w-8 ${confirming ? "text-destructive" : "text-muted-foreground hover:text-destructive"}`}
+        disabled={pending}
+        onClick={handleDelete}
+        title={
+          confirming
+            ? "Klik sekali lagi untuk konfirmasi hapus"
+            : hasResponses
+              ? `Hapus form (soft delete — ${responseCount} respons tetap tersimpan, bisa dikembalikan dari sampah)`
+              : "Hapus form (kosong, tanpa respons)"
+        }
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </Button>
     </div>
   );
 }

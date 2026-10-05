@@ -120,9 +120,11 @@ export async function getOpenForms(options?: {
   const now = new Date().toISOString();
 
   // Filter ini harus konsisten dengan isFormActive().
+  // Soft delete (Fase 7-6): form yang di-soft-delete tidak muncul di landing.
   let query = supabase
     .from("forms")
     .select("*")
+    .eq("is_deleted", false)
     .eq("is_open", true)
     .lte("open_date", now)
     .gt("close_date", now);
@@ -142,9 +144,11 @@ export async function countOpenForms(): Promise<number> {
   const now = new Date().toISOString();
 
   // Filter ini harus konsisten dengan isFormActive().
+  // Soft delete (Fase 7-6): exclude form yang di-soft-delete.
   const { count, error } = await supabase
     .from("forms")
     .select("id", { count: "exact", head: true })
+    .eq("is_deleted", false)
     .eq("is_open", true)
     .lte("open_date", now)
     .gt("close_date", now);
@@ -160,6 +164,7 @@ export async function getFormBySlug(slug: string): Promise<Form | null> {
     .from("forms")
     .select("*")
     .eq("slug", slug)
+    .eq("is_deleted", false)
     .single();
 
   if (error) {
@@ -180,6 +185,7 @@ export async function getFormById(id: string): Promise<Form | null> {
     .from("forms")
     .select("*")
     .eq("id", id)
+    .eq("is_deleted", false)
     .single();
 
   if (error) {
@@ -194,6 +200,7 @@ export async function getAllForms(options?: {
   formType?: FormType;
   page?: number;
   pageSize?: number;
+  includeDeleted?: boolean; // Fase 7-6: true untuk halaman sampah
 }): Promise<{ data: Form[]; count: number }> {
   await requireAdmin();
   const supabase = await createClient();
@@ -202,9 +209,12 @@ export async function getAllForms(options?: {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  // Soft delete (Fase 7-6): dashboard default hanya tampilkan form yang
+  // belum dihapus. Opsi includeDeleted untuk halaman sampah.
   let query = supabase
     .from("forms")
     .select("*", { count: "exact" })
+    .eq("is_deleted", options?.includeDeleted ?? false)
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -221,9 +231,11 @@ export async function getAllForms(options?: {
 export async function countActiveForms(): Promise<number> {
   await requireAdmin();
   const supabase = await createClient();
+  // Soft delete (Fase 7-6): exclude form yang di-soft-delete.
   const { count, error } = await supabase
     .from("forms")
     .select("id", { count: "exact", head: true })
+    .eq("is_deleted", false)
     .eq("is_open", true);
 
   if (error) throw new Error(`Gagal menghitung form aktif: ${error.message}`);
@@ -280,17 +292,19 @@ export async function toggleFormOpen(
 }
 
 /**
- * Hapus form (admin) — AMAN (Fase 4C).
+ * Hapus form (admin) — Fase 4C + Fase 7-6 (soft delete).
  *
- * Default strategis: form yang SUDAH MEMILIKI respons TIDAK BOLEH dihapus
- * (hard-delete akan menghilangkan data + memutus riwayat status). Penghapusan
- * hanya diizinkan bila form BELUM punya respons sama sekali. Untuk menutup
- * form yang sudah berjalan, pakai `toggleFormOpen(id, false)` — buka/tutup
- * tanpa menghilangkan data.
+ * Perilaku:
+ *  - Form PUNYA respons -> SOFT DELETE: tandai is_deleted=true, sembunyikan
+ *    dari dashboard + landing. Data + respons + riwayat status tetap utuh.
+ *    Ini yang sebelumnya DITOLAK total (Fase 4C); sekarang bisa dihapus
+ *    dengan aman tanpa kehilangan data.
+ *  - Form KOSONG (0 respons) -> HARD DELETE: benar-benar dihapus (tidak ada
+ *    data yang hilang). Sama seperti Fase 4C.
  *
- * Penghitungan memakai head-count (tidak memuat baris respons).
+ * !!! Pertahanan: hard delete hanya bila 0 respons. Cek via head-count.
  */
-export async function deleteForm(id: string): Promise<void> {
+export async function deleteForm(id: string): Promise<{ softDeleted: boolean }> {
   await requireAdmin();
   const supabase = await createClient();
 
@@ -304,14 +318,40 @@ export async function deleteForm(id: string): Promise<void> {
   }
 
   if ((count ?? 0) > 0) {
-    throw new Error(
-      `Form ini memiliki ${count} respons dan tidak dapat dihapus. ` +
-        "Tutup form (toggle) sebagai gantinya agar data tetap terjaga."
-    );
+    // Soft delete: sembunyikan, data tetap utuh.
+    const { error } = await supabase
+      .from("forms")
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) throw new Error(`Gagal menghapus form: ${error.message}`);
+    return { softDeleted: true };
   }
 
+  // Hard delete bila kosong (tidak ada data yang hilang).
   const { error } = await supabase.from("forms").delete().eq("id", id);
   if (error) throw new Error(`Gagal menghapus form: ${error.message}`);
+  return { softDeleted: false };
+}
+
+/**
+ * Kembalikan form dari soft delete (admin) — Fase 7-6.
+ *
+ * Hanya untuk form yang is_deleted=true. Membatalkan tanda penghapusan,
+ * form muncul lagi di dashboard (is_open tetap apa adanya — bila ditutup
+ * sebelum dihapus, tetap ditutup setelah dikembalikan).
+ */
+export async function restoreForm(id: string): Promise<void> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("forms")
+    .update({ is_deleted: false, deleted_at: null })
+    .eq("id", id)
+    .eq("is_deleted", true);
+
+  if (error) throw new Error(`Gagal mengembalikan form: ${error.message}`);
 }
 
 /**

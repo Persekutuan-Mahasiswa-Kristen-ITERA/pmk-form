@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { Plus, FileText, Users, Eye, Edit, Calendar, Filter } from "lucide-react";
+import { Plus, FileText, Users, Eye, Edit, Calendar, Filter, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +45,11 @@ export default async function FormsAdminPage({
         </div>
 
         <div className="flex items-center gap-2">
+          <Link href="/admin/forms/trash">
+            <Button variant="outline">
+              <Trash2 className="w-4 h-4 mr-2" /> Sampah
+            </Button>
+          </Link>
           <Link href="/admin/forms/new">
             <Button className="bg-primary">
               <Plus className="w-4 h-4 mr-2" /> Buat Form Baru
