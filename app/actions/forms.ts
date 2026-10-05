@@ -1,6 +1,12 @@
 "use server";
 
-import { createForm, updateForm, toggleFormOpen, deleteForm } from "@/lib/forms";
+import {
+  createForm,
+  updateForm,
+  toggleFormOpen,
+  deleteForm,
+  duplicateForm,
+} from "@/lib/forms";
 import { revalidateFormAdminData, revalidateForm } from "@/app/actions/revalidate";
 import type { Form } from "@/types/forms";
 
@@ -51,5 +57,18 @@ export async function deleteFormAction(id: string) {
     return { success: true as const };
   } catch (err) {
     return { success: false as const, error: err instanceof Error ? err.message : "Gagal menghapus form." };
+  }
+}
+
+// Fase 7-4: duplikasi form dari kartu admin. duplicateForm (lib) memanggil
+// requireAdmin(); hasil selalu is_open=false supaya admin periksa dulu.
+// Mengembalikan form baru agar UI bisa langsung arahkan ke halaman editnya.
+export async function duplicateFormAction(id: string) {
+  try {
+    const data = await duplicateForm(id);
+    await revalidateFormAdminData();
+    return { success: true as const, data };
+  } catch (err) {
+    return { success: false as const, error: err instanceof Error ? err.message : "Gagal menduplikasi form." };
   }
 }

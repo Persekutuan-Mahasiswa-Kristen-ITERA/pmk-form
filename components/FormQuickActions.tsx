@@ -1,10 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Lock, Trash2 } from "lucide-react";
+import { Lock, Trash2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toggleFormOpenAction, deleteFormAction } from "@/app/actions/forms";
+import {
+  toggleFormOpenAction,
+  deleteFormAction,
+  duplicateFormAction,
+} from "@/app/actions/forms";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 /**
  * Aksi cepat kartu admin (Fase 4C).
@@ -26,6 +31,7 @@ export function FormQuickActions({
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
   const hasResponses = responseCount > 0;
 
   const handleToggle = () =>
@@ -57,6 +63,26 @@ export function FormQuickActions({
       });
     });
 
+  const handleDuplicate = () =>
+    startTransition(async () => {
+      const res = await duplicateFormAction(formId);
+      if (!res.success) {
+        toast({
+          title: "Gagal",
+          description: res.error,
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Form diduplikasi",
+        description: "Salinan dibuat dalam keadaan ditutup. Periksa dulu sebelum dibuka.",
+      });
+      // Bawa admin langsung ke editor form baru untuk diperiksa.
+      router.push(`/admin/forms/${res.data.id}`);
+      router.refresh();
+    });
+
   return (
     <div className="flex items-center gap-1">
       <Button
@@ -68,6 +94,17 @@ export function FormQuickActions({
         title={isOpen ? "Tutup form" : "Buka form"}
       >
         {isOpen ? "Tutup" : "Buka"}
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-muted-foreground hover:text-primary"
+        disabled={pending}
+        onClick={handleDuplicate}
+        title="Duplikasi form (salinan dibuat dalam keadaan ditutup)"
+      >
+        <Copy className="w-3.5 h-3.5" />
       </Button>
 
       {hasResponses ? (
