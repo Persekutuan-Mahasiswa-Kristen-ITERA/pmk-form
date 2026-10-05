@@ -1,6 +1,6 @@
 import { getFormBySlug } from "@/lib/forms";
 import { GenericFormRenderer } from "@/components/GenericFormRenderer";
-import { GoldenParticles } from "@/components/GoldenParticles";
+import { GoldenParticles } from "@/components/LazyGoldenParticles";
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";

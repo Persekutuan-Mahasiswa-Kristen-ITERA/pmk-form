@@ -1,7 +1,7 @@
 import { getOpenForms, countOpenForms } from "@/lib/forms";
-import { GoldenParticles } from "@/components/GoldenParticles";
-import { BibleVerseBanner } from "@/components/BibleVerseBanner";
 import { FormCard } from "@/components/FormCard";
+import { GoldenParticles } from "@/components/LazyGoldenParticles";
+import { BibleVerseBanner } from "@/components/LazyBibleVerseBanner";
 import { ClipboardList, Users, BarChart3, TrendingUp } from "lucide-react";
 import { PMKLogo } from "@/components/PMKLogo";
 import { FORM_CATEGORIES, StatCard, FilterChip, computeFormStats } from "@/components/landing";
