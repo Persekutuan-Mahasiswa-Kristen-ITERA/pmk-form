@@ -521,6 +521,32 @@ hard-delete ditolak). Sekarang bisa dihapus dengan aman via soft delete:
 merge/deploy. Bila belum jalan, query baca akan error 42703 (undefined_column)
 -> halaman form gagal load. Pastikan migration jalan DULU.
 
+### Item 7: Dokumentasi backup & pemulihan (branch `docs/backup-prosedur`)
+
+Tidak ada perubahan kode/migration — hanya dokumentasi.
+
+- `docs/BACKUP_PROCEDURE.md` (baru): prosedur backup & pemulihan lengkap.
+  Bagian utama:
+  - **Kenapa backup DB penuh di-skip** (kejujuran teknis): paket Free/Pro
+    Supabase; diganti dengan prinsip migration non-destruktif + snapshot
+    policy + soft delete + audit append-only.
+  - Yang wajib di-backup (kode+migration di git otomatis; env var di Vercel).
+  - Prosedur berkala manual gratis: cek kesehatan DB bulanan (query
+    read-only) + export manual 3 bulanan + **cara tes backup bisa
+    dipulihkan** (restore ke docker postgres, bandingkan angka).
+  - Playbook pemulihan 4 kasus: migration rusak, deploy rusak, form publik
+    error mendadak, dan **data hilang total**.
+  - **Matriks apa yang bisa/tidak bisa dipulihkan** — penemuan penting:
+    - `form_responses` bisa direkonstruksi **sebagian** dari Sheets (backup
+      de facto), tapi **lampiran Storage TIDAK bisa** (tidak ada backup
+      gratis) -> risiko terbesar.
+  - Rekomendasi urut risiko vs biaya (Sheets sync dulu, export manual,
+    Supabase Pro, export Storage, Sentry).
+  - Checklist pasca-incident.
+- `DEPLOYMENT.md`: bagian rollout sekarang merujuk `BACKUP_PROCEDURE.md` +
+  daftar migration yang sudah live diperbarui (010, 011, 012).
+- Verifikasi: tidak ada perubahan kode -> tsc/eslint/build/test tidak terpengaruh.
+
 ---
 
 ## PRODUKSI (snapshot Fase 0, untuk konteks)

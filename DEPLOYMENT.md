@@ -33,11 +33,13 @@ grep -r SUPABASE_SERVICE_ROLE_KEY .next/static || echo "aman: tidak ada di bundl
 
 ## 3. Urutan rollout (setiap rilis yang memuat migration)
 
-1. **Backup / snapshot**: kebijakan RLS → `docs/LEGACY_POLICY_SNAPSHOT.md`;
-   data tidak disentuh migration (prinsip sejak Fase 0).
+1. **Backup / snapshot**: lihat `docs/BACKUP_PROCEDURE.md` (prosedur backup
+   lengkap + matriks apa yang bisa dipulihkan). Kebijakan RLS snapshot →
+   `docs/LEGACY_POLICY_SNAPSHOT.md`; data tidak disentuh migration
+   (prinsip non-destruktif sejak Fase 0).
 2. **Jalankan migration** di Supabase **SQL Editor**, sesuai nomor urut di
    `migrations/`. Setiap file mencantumkan cara run + rollback-nya sendiri.
-   Status migration yang sudah live: 002, 002b, 003, 005, 007, 008.
+   Status migration yang sudah live: 002, 002b, 003, 005, 007, 008, 010, 011, 012.
 3. **Merge PR → Vercel auto-deploy** dari `main`.
 4. **Verifikasi pasca-deploy**:
    - Landing `/` memuat (form aktif tampil).
