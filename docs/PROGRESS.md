@@ -388,6 +388,45 @@ Urutan disetujui user (balasan `lanjut`): CI → Turnstile → status respons
   bisa diuji unit (manfaat untuk item Fase 7 berikutnya).
 - Verifikasi: tsc 0, eslint 0, build OK, 39/39 tes (8 baru).
 
+### Item 3: Status respons (branch `feat/status-respons`)
+
+**Keputusan: Opsi A — pensiunkan total `/hasil` + `/api/cek-hasil`.**
+Tabel `selection_results` (54 baris, departemen/divisi OPREC lama) tidak cocok
+untuk form generik. Halaman cek-hasil publik akan **dibangun ulang nanti** dengan
+lebih proper (baca `form_responses.status`). Penghapusan hanya di kode aplikasi —
+**tabel legacy TIDAK di-drop** (data tetap utuh, no destruktif).
+
+Yang dilakukan:
+
+- `migrations/011_response_status.sql` (non-destruktif, teruji di Postgres 17
+  isolated): kolom `form_responses.status text` (NULL = belum diproses) dengan
+  CHECK constraint (`diterima` / `tidak_lolos` / `cadangan`), partial index
+  `idx_form_responses_status`, dan policy RLS baru
+  "Admins can update response status" (UPDATE, hanya `is_admin()`).
+  Idempoten 2x; data lama tetap NULL semua.
+- `types/forms.ts`: tipe `ResponseStatus` + map `RESPONSE_STATUS_LABELS`;
+  `FormResponse.status?`.
+- `app/actions/responseStatus.ts`: `updateResponseStatusAction` (validasi zod,
+  `requireAdmin()`, deteksi 42703 = migration belum jalan) +
+  `bulkUpdateStatusAction` (batch via `.in()`).
+- `components/StatusCell.tsx`: dropdown status per baris (badge berwarna),
+  `useTransition` supaya tidak memblokir UI.
+- `components/GenericResponseTable.tsx`: kolom Status + filter dropdown +
+  kolom "Status" di export CSV.
+- **Dihapus (pensiun)**: `app/hasil/page.tsx`, `app/api/cek-hasil/route.ts`,
+  `app/actions/formOptions.ts` (`getRecruitmentFormOptions` — hanya dipakai
+  `/hasil`, 0 pemanggil lain). Tidak ada link UI ke `/hasil` sebelumnya.
+- Komentar di `lib/forms.ts` & `lib/supabase/service.ts` yang merujuk
+  `cek-hasil` diperbarui.
+- Verifikasi: tsc 0, eslint 0, build OK (route `/hasil` & `/api/cek-hasil`
+  hilang dari output build), 39/39 tes.
+
+**Belum (dikerjakan nanti, item terpisah)**: halaman publik cek-hasil baru
+yang membaca `form_responses.status` + label per form. Karena semua form
+produksi sudah tutup, tidak ada urgensi.
+
+**Rollout**: jalankan migration 011 ke produksi SEBELU merge/deploy.
+
 ---
 
 ## PRODUKSI (snapshot Fase 0, untuk konteks)

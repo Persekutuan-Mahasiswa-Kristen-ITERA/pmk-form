@@ -99,12 +99,26 @@ export interface Form {
 
 // FormResponse — maps to public.form_responses table
 // NOTE: All identity data (NIM, email, name) lives inside `answers` jsonb
+
+// Fase 7-3: status proses seleksi per respons (migration 011).
+// Harus cocok dengan CHECK constraint di DB.
+export type ResponseStatus = "diterima" | "tidak_lolos" | "cadangan";
+
+export const RESPONSE_STATUS_LABELS: Record<ResponseStatus, string> = {
+  diterima: "Diterima",
+  tidak_lolos: "Tidak Lolos",
+  cadangan: "Cadangan",
+};
+
 export interface FormResponse {
   id: string;
   form_id: string;
   answers: Record<string, unknown>; // Key = field id, Value = string | string[] | null
   files: string[];                  // Array of public URL strings
   respondent_id: string | null;
+  // Fase 7-3: status proses seleksi. NULL = belum diproses.
+  // Diupdate admin saja (lihat updateResponseStatusAction).
+  status?: ResponseStatus | null;
   submitted_at: string;
   updated_at: string;
 }
