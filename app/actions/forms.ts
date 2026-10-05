@@ -6,6 +6,7 @@ import {
   toggleFormOpen,
   deleteForm,
   duplicateForm,
+  restoreForm,
 } from "@/lib/forms";
 import { audit, auditBestEffort } from "@/lib/audit";
 import { revalidateFormAdminData, revalidateForm } from "@/app/actions/revalidate";
@@ -60,13 +61,27 @@ export async function toggleFormOpenAction(id: string, isOpen: boolean) {
 // punya respons; pesan penolakan itu yang diteruskan ke admin.
 export async function deleteFormAction(id: string) {
   try {
-    await deleteForm(id);
+    const result = await deleteForm(id);
     // Audit: delete form sensitif -> audit() (lempar bila gagal).
-    await audit("form_delete", { id });
+    // Catat apakah soft delete (ada respons) atau hard delete (kosong).
+    await audit("form_delete", { id, soft: result.softDeleted });
+    await revalidateFormAdminData();
+    return { success: true as const, softDeleted: result.softDeleted };
+  } catch (err) {
+    return { success: false as const, error: err instanceof Error ? err.message : "Gagal menghapus form." };
+  }
+}
+
+// Fase 7-6: kembalikan form dari soft delete (dari halaman sampah).
+// restoreForm (lib) memanggil requireAdmin(); membatalkan is_deleted.
+export async function restoreFormAction(id: string) {
+  try {
+    await restoreForm(id);
+    await audit("form_update", { id, restored_from_soft_delete: true });
     await revalidateFormAdminData();
     return { success: true as const };
   } catch (err) {
-    return { success: false as const, error: err instanceof Error ? err.message : "Gagal menghapus form." };
+    return { success: false as const, error: err instanceof Error ? err.message : "Gagal mengembalikan form." };
   }
 }
 

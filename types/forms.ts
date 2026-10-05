@@ -95,6 +95,9 @@ export interface Form {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  // Fase 7-6: soft delete (migration 013). false = tampil normal.
+  is_deleted?: boolean;
+  deleted_at?: string | null;
 }
 
 // FormResponse — maps to public.form_responses table
