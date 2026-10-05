@@ -9,7 +9,8 @@ import { createClient } from "@supabase/supabase-js";
  * `SUPABASE_SERVICE_ROLE_KEY` to the browser. It exists for operations that
  * must run with elevated privileges while performing their own validation —
  * e.g. the public form-submission server action (which validates server-side
- * before writing), and the `/api/cek-hasil` route.
+ * before writing) and the Sheets outbox writer (Fase 6).
+ * (The legacy `/api/cek-hasil` route was retired in Fase 7-3.)
  *
  * The client is created per call and holds no session state.
  */

@@ -10,6 +10,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Dialog,
@@ -18,14 +25,22 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Download, FileText, Trash2, Eye, ArrowLeft, Loader2 } from "lucide-react";
+import { Download, FileText, Trash2, Eye, ArrowLeft, Loader2, Filter } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import JSZip from "jszip";
 import saveAs from "file-saver";
 import { deleteFormResponseAction } from "@/app/actions/deleteResponse";
-import type { Form, FormResponse, FieldConfig, FieldValue } from "@/types/forms";
+import { StatusCell } from "./StatusCell";
+import type {
+  Form,
+  FormResponse,
+  FieldConfig,
+  FieldValue,
+  ResponseStatus,
+} from "@/types/forms";
+import { RESPONSE_STATUS_LABELS } from "@/types/forms";
 
 /**
  * Resolve a field's answer from a response.
@@ -53,9 +68,17 @@ export function GenericResponseTable({
   const [isExportingCsv, setIsExportingCsv] = useState(false);
   const [isExportingZip, setIsExportingZip] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
+  // Fase 7-3: filter status di tabel admin.
+  const [statusFilter, setStatusFilter] = useState<ResponseStatus | "all">("all");
   const { toast } = useToast();
 
   const fields = form.form_fields || [];
+
+  // Fase 7-3: respons yang ditampilkan, difilter status.
+  const visibleResponses =
+    statusFilter === "all"
+      ? responses
+      : responses.filter((r) => (r.status ?? null) === statusFilter);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Apakah Anda yakin ingin menghapus respons ini?")) return;
@@ -82,6 +105,12 @@ export function GenericResponseTable({
           const val = resolveAnswer(res, f);
           rowData[f.label] = Array.isArray(val) ? val.join(", ") : val || "";
         });
+
+        // Fase 7-3: sertakan status di export CSV.
+        rowData["Status"] =
+          res.status == null
+            ? "Belum diproses"
+            : RESPONSE_STATUS_LABELS[res.status];
 
         if (res.files && res.files.length > 0) {
           rowData["Lampiran"] = res.files.join(" ; ");
@@ -177,6 +206,24 @@ export function GenericResponseTable({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Fase 7-3: filter berdasarkan status seleksi. */}
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as ResponseStatus | "all")}
+          >
+            <SelectTrigger className="w-[170px] h-9 text-xs rounded-lg">
+              <Filter className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="Semua status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Semua status</SelectItem>
+              <SelectItem value="null" className="text-xs">Belum diproses</SelectItem>
+              <SelectItem value="diterima" className="text-xs">Diterima</SelectItem>
+              <SelectItem value="tidak_lolos" className="text-xs">Tidak Lolos</SelectItem>
+              <SelectItem value="cadangan" className="text-xs">Cadangan</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Button variant="outline" size="sm" onClick={handleExportCsv} disabled={isExportingCsv || responses.length === 0}>
             {isExportingCsv ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FileText className="w-4 h-4 mr-1" />}
             Export CSV
@@ -209,11 +256,12 @@ export function GenericResponseTable({
                     {fields.slice(0, 3).map((f) => (
                       <TableHead key={f.id}>{f.label}</TableHead>
                     ))}
+                    <TableHead className="min-w-[140px]">Status</TableHead>
                     <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {responses.map((res, idx) => {
+                  {visibleResponses.map((res, idx) => {
                     return (
                       <TableRow key={res.id}>
                         <TableCell className="font-medium">{idx + 1}</TableCell>
@@ -229,6 +277,15 @@ export function GenericResponseTable({
                             </TableCell>
                           );
                         })}
+                        <StatusCell
+                          res={res}
+                          formId={form.id}
+                          onUpdated={(newStatus) =>
+                            setResponses((prev) =>
+                              prev.map((r) => (r.id === res.id ? { ...r, status: newStatus } : r))
+                            )
+                          }
+                        />
                         <TableCell className="text-right space-x-1">
                           <Button
                             variant="ghost"

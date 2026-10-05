@@ -48,8 +48,9 @@ export function isFormActive(form: {
  *
  * Field disuntikkan dengan id STABIL (bukan label) supaya:
  *  - pengecekan duplikat NIM di submitResponse (`field_applicant_nim`) cocok,
- *  - cek-hasil bisa membaca `field_applicant_nim`/`field_applicant_name`/
- *    `field_applicant_email` (sama seperti data pra-migrasi).
+ *  - pengecekan identitas (mis. NIM/nama/email) konsisten lintas form dan
+ *    mudah dipakai untuk filter status di admin (Fase 7-3).
+ *    (sama seperti data pra-migrasi).
  *
  * Field yang sudah dideklasikan di form TIDAK digandakan: jika form sudah punya
  * field dengan id yang sama, yang ada dipakai (admin bebas mengaturnya).
@@ -282,7 +283,7 @@ export async function toggleFormOpen(
  * Hapus form (admin) — AMAN (Fase 4C).
  *
  * Default strategis: form yang SUDAH MEMILIKI respons TIDAK BOLEH dihapus
- * (hard-delete akan menghilangkan data + merusak cek-hasil). Penghapusan
+ * (hard-delete akan menghilangkan data + memutus riwayat status). Penghapusan
  * hanya diizinkan bila form BELUM punya respons sama sekali. Untuk menutup
  * form yang sudah berjalan, pakai `toggleFormOpen(id, false)` — buka/tutup
  * tanpa menghilangkan data.
