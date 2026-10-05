@@ -354,7 +354,7 @@ Yang dikerjakan:
 Urutan disetujui user (balasan `lanjut`): CI → Turnstile → status respons
 → duplikasi form → audit log → soft delete/backup → sisanya kalau dibutuhkan.
 
-### Item 1: CI GitHub Actions (branch `ci/github-actions`, PR #13)
+### Item 1: CI GitHub Actions (branch `ci/github-actions`, **PR #13 MERGED**)
 
 - `.github/workflows/ci.yml`: jalankan tiap PR + push ke cabang utama.
   Langkah berurutan: `npm ci` → `npx tsc --noEmit` → `npx eslint .` →
@@ -368,7 +368,7 @@ Urutan disetujui user (balasan `lanjut`): CI → Turnstile → status respons
 - Verifikasi lokal dgn placeholder yg sama: tsc 0, eslint 0, 31/31 tes, build OK.
   CI GitHub: hijau 57 dtk setelah fix Node.
 
-### Item 2: Cloudflare Turnstile (branch `feat/turnstile`)
+### Item 2: Cloudflare Turnstile (branch `feat/turnstile`, **PR #14 MERGED 2026-10-05**)
 
 - `lib/turnstile.ts` (server-only): `verifyTurnstileToken()` — fetch ke
   `siteverify` Cloudflare memakai SECRET KEY. Fail-open: gangguan Cloudflare
@@ -388,7 +388,7 @@ Urutan disetujui user (balasan `lanjut`): CI → Turnstile → status respons
   bisa diuji unit (manfaat untuk item Fase 7 berikutnya).
 - Verifikasi: tsc 0, eslint 0, build OK, 39/39 tes (8 baru).
 
-### Item 3: Status respons (branch `feat/status-respons`)
+### Item 3: Status respons (branch `feat/status-respons`, **PR #15 MERGED 2026-10-05**)
 
 **Keputusan: Opsi A — pensiunkan total `/hasil` + `/api/cek-hasil`.**
 Tabel `selection_results` (54 baris, departemen/divisi OPREC lama) tidak cocok
