@@ -4,7 +4,7 @@ import { Plus, FileText, Users, Eye, Edit, Calendar, Filter, Trash2 } from "luci
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getAllForms, countFormResponses, countActiveForms } from "@/lib/forms";
+import { getAllForms, countResponsesForForms, countActiveForms } from "@/lib/forms";
 import { FormQuickActions } from "@/components/FormQuickActions";
 import type { Form, FormType } from "@/types/forms";
 
@@ -26,13 +26,12 @@ export default async function FormsAdminPage({
 
   const activeCount = await countActiveForms();
 
-  // Load response counts for each form in parallel
-  const formsWithCounts = await Promise.all(
-    forms.map(async (form) => {
-      const responseCount = await countFormResponses(form.id);
-      return { ...form, responseCount };
-    })
-  );
+  // Batch-count response counts for all forms in one query (replaces N+1).
+  const responseCounts = await countResponsesForForms(forms.map((f) => f.id));
+  const formsWithCounts = forms.map((form) => ({
+    ...form,
+    responseCount: responseCounts[form.id] ?? 0,
+  }));
 
   return (
     <div className="space-y-6">

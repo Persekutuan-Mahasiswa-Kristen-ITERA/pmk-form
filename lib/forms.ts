@@ -502,7 +502,7 @@ export async function getAllFormResponses(
   return (data ?? []) as FormResponse[];
 }
 
-/** Count responses for a form. */
+/** Count responses for a single form. */
 export async function countFormResponses(formId: string): Promise<number> {
   await requireAdmin();
   const supabase = await createClient();
@@ -513,6 +513,40 @@ export async function countFormResponses(formId: string): Promise<number> {
 
   if (error) throw new Error(`Gagal menghitung respons: ${error.message}`);
   return count ?? 0;
+}
+
+/**
+ * Count responses for MULTIPLE forms in a single query (batch).
+ * Replaces N+1: previously each form called countFormResponses individually.
+ */
+export async function countResponsesForForms(formIds: string[]): Promise<Record<string, number>> {
+  await requireAdmin();
+  if (formIds.length === 0) return {};
+  const supabase = await createClient();
+  
+  // Single query: fetch all response rows for these forms, count in JS.
+  // This replaces N individual count queries with 1 select query.
+  const { data, error } = await supabase
+    .from("form_responses")
+    .select("form_id", { head: true, count: "exact" })
+    .in("form_id", formIds);
+
+  if (error) {
+    // Fallback: return zeros so the page still renders
+    return Object.fromEntries(formIds.map((id) => [id, 0]));
+  }
+
+  // Build count map from the data
+  const counts: Record<string, number> = Object.fromEntries(formIds.map((id) => [id, 0]));
+  if (data) {
+    for (const row of data) {
+      const fid = row.form_id;
+      if (fid && fid in counts) {
+        counts[fid] += 1;
+      }
+    }
+  }
+  return counts;
 }
 
 /**

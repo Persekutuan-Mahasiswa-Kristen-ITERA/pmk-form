@@ -1,0 +1,30 @@
+{
+  "id": "b948b0b52",
+  "name": "Baseline next build",
+  "command": "sh /tmp/run-build.sh",
+  "description": "Baseline next build with env loaded, output captured for inspection",
+  "status": "failed",
+  "outputPath": ".pi/tasks/01a0f641-2eaa-77ef-9f95-170a8cf254f4-18916/b948b0b52.output",
+  "cwd": "/home/fycode/Documents/pmk-form",
+  "startTime": 1790839048972,
+  "endTime": 1790839049011,
+  "exitCode": 2,
+  "signal": null,
+  "pid": 41437,
+  "bytesWritten": 39,
+  "isAgent": false,
+  "surviveReload": false,
+  "error": "Exited with code 2",
+  "notified": true,
+  "notifyOnCompletion": true,
+  "triggerOnCompletion": true,
+  "timeoutSeconds": 600,
+  "shellPolicy": {
+    "policy": "inherit",
+    "executable": "/usr/bin/zsh",
+    "argvPrefix": [
+      "-c"
+    ],
+    "dialect": "posix"
+  }
+}
