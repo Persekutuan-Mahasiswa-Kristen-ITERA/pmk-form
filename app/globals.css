@@ -6,6 +6,25 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  /* Sembunyikan scrollbar pada kontainer yang sengaja bisa digeser horizontal
+     (filter chip, nav). Kelas ini sudah dipakai di beberapa komponen tetapi
+     sebelumnya belum didefinisikan (UI Overhaul U1). */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Padding safe-area untuk bar tetap (navbar, bottom action bar) di iOS. */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
 }
 
 

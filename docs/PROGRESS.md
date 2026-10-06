@@ -556,3 +556,112 @@ Tidak ada perubahan kode/migration — hanya dokumentasi.
 - `user_roles` = 0 baris; `selection_results` = 54 baris
 - Signup publik aktif (`disable_signup: false`) — **harus dimatikan saat rollout**
 - Tidak ada route `/recruitment/[slug]` atau `/admin/recruitments` (klaim dokumen lama salah)
+
+---
+
+## UI OVERHAUL — U1: Fondasi desain (branch `feat/ui-foundation`)
+
+**Status:** selesai, menunggu verifikasi visual di checkpoint U1.
+
+Tujuan (lihat `PROMPT_UI_OVERHAUL_PMK_FORM.md`): membangun sistem desain bersama
+yang dipakai semua halaman, responsif mobile-first (Android + iOS), plus
+halaman 404/error/loading yang selaras brand. Token warna/font/logo TIDAK
+berubah (batasan 1).
+
+### Yang dikerjakan
+
+**Token & global (presentasional, tanpa warna/font baru):**
+- `app/layout.tsx`: tambah `export const viewport` — `viewportFit: "cover"`
+  (iOS safe-area) + `themeColor: "#F8F6F0"` (sama dengan token `--background`).
+- `app/globals.css`: definisi utility `scrollbar-hide` (sebelumnya dead class —
+  dipakai di navbar admin + filter landing tapi tidak pernah didefinisikan) dan
+  `pt-safe`/`pb-safe` (`env(safe-area-inset-*)`).
+- `eslint.config.mjs`: diperbaiki — config lama mengimpor
+  `eslint-config-next/core-web-vitals` tanpa ekstensi (Node ESM strict), lalu
+  setelah ditambah `.js` ketahuan config Next 15.5 berformat eslintrc warisan
+  (`{extends, rules}`), bukan flat config. Solusi: `FlatCompat` dari
+  `@eslint/eslintrc` (sudah jadi dependensi eslint, tidak ada dependency baru).
+  Hasil: `npx eslint .` akhirnya jalan setelah sekian lama rusak.
+
+**Helper murni (server-safe, unit-tested):**
+- `lib/format.ts`: `formatDate` (id-ID, zona WIB via `Intl.DateTimeFormat` —
+  konsisten terlepas dari zona server Vercel UTC), `daysUntil` (hari kalender
+  WIB), `isPast`, `lastMonths` (bucket bulan + label Indonesia untuk grafik),
+  `bucketizeByMonth` (agregasi respons per bulan).
+- `lib/form-status.ts`: `getFormStatus()` — SATU sumber label status
+  (`not_open`/`open`/`closing_soon`/`closed`). "Aktif" tetap memakai definisi
+  tunggal `isFormActive()` dari `lib/forms` (Fase 2-4); file ini hanya
+  menerjemahkan ke label + kelas. `CLOSING_SOON_DAYS = 7`.
+
+**Komponen bersama:**
+- `components/admin-shell.tsx` + `components/admin-nav.tsx`: navbar admin
+  responsif. Desktop: sticky, logo + "PMK Admin" + menu ikon + identitas user +
+  Keluar; ada state aktif per-route (`usePathname`, teks accent + latar halus).
+  Mobile (<lg): bar ringkas + drawer `Sheet` sisi kiri (keputusan U0-a) berisi
+  menu (min-height 44px), identitas user, dan tombol Keluar. Menu Admin & Audit
+  Log hanya untuk `super_admin`.
+- `components/public-shell.tsx`: header ringan (logo terpusus) + footer untuk
+  halaman publik.
+- `components/page-header.tsx`, `components/section-card.tsx`,
+  `components/stat-card.tsx` (varian `warning` dari token `destructive`),
+  `components/badges.tsx` (`StatusBadge` — teks wajib + titik; `CategoryBadge`
+  — warna dipetakan dari `FormCard`), `components/empty-state.tsx`,
+  `components/segmented-control.tsx`, `components/confirm-dialog.tsx`
+  (pengganti `window.confirm()` untuk aksi destruktif),
+  `components/responsive-table.tsx` (tabel desktop → daftar kartu di < md),
+  `components/skeleton.tsx`, `components/ui/sheet.tsx` (dibangun di atas
+  `@radix-ui/react-dialog` — pola resmi shadcn, tanpa dependency baru).
+
+**Halaman state (bagian 6 prompt):**
+- `app/not-found.tsx` (404 global, `noindex`, tombol sekunder berbeda untuk
+  admin vs publik — ditentukan di server tanpa membocorkan rute admin),
+- `app/form/[slug]/not-found.tsx` (pesan aman "tidak ditemukan atau sudah
+  ditutup" — tidak membedakan slug salah vs form ditutup, sesuai RLS),
+- `app/error.tsx` (root error boundary, pesan generik + `Coba lagi`, hanya log
+  digest anonim),
+- `app/global-error.tsx` (merender `<html>`+`<body>` sendiri karena bypass
+  root layout; inline style karena layout/font di-bypass),
+- `app/admin/(dashboard)/not-found.tsx` (404 area admin),
+- 403 `Akses Ditolak` di layout admin dipoles pakai token + `<PMKLogo />`
+  (logika `getAdminUser()` TIDAK diubah),
+- `app/loading.tsx` (root), `app/admin/(dashboard)/loading.tsx`,
+  `app/form/[slug]/loading.tsx` — skeleton bermerek menggantikan spinner polos.
+
+**Integrasi:** `app/admin/(dashboard)/layout.tsx` sekarang merender
+`<AdminShell>` (navbar lama yang tidak responsif dihapus; logika 403 tetap).
+
+**Tes:** `tests/format.test.ts` + `tests/form-status.test.ts` — 26 tes baru.
+
+### Verifikasi
+
+- `npx tsc --noEmit`: **0 error**.
+- `npx eslint app/ components/ lib/ tests/`: **0 error/warning**. (`npx eslint .`
+  masih 2 error di `scripts/analyze-bundle.js` — **pre-existing**, bukan file
+  U1; `git stash` konfirmasi tidak ada perubahan di file itu.)
+- `npm run test:unit`: **69 pass / 0 fail** (43 existing + 26 baru).
+- `next build`: **BELUM bisa dijalankan** — butuh env Supabase
+  (`NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY`/`SERVICE_ROLE_KEY`) yang tidak ada di
+  environment ini.
+- Verifikasi visual: **BELUM dilakukan** — `vision_analyze` ditolak model
+  (Atria-Dawn-Preview tidak mendukung vision). Rencana: screenshot per viewport
+  (360/390/768/1024/1440) via `browser_exec` setelah dev server bisa start.
+
+### Catatan keamanan
+
+- Semua halaman state memakai pesan generik (tidak ada stack trace, tidak ada
+  detail rute/DB). `error.tsx` hanya log `error.digest` (anonim).
+- 404 global memutuskan tombol sekunder lewat `getAdminUser()` di server;
+  pengguna non-admin hanya melihat tombol publik — tidak ada kebocoran
+  keberadaan rute admin.
+- 404 form tidak membedakan "slug tidak ada" vs "form ditutup" (RLS mengembalikan
+  null untuk keduanya bagi non-admin).
+- Otorisasi tidak diubah: `getAdminUser()` di layout, `requireAdmin()` di server
+  action, RLS Supabase, dan `proxy.ts` tetap sebagaimana adanya.
+
+### Risiko/regresi
+
+- `AdminShell` menggantikan navbar lama — bila ada halaman admin yang mengandalkan
+  class `highlight`/struktur lama, perlu dicek visual di U2.
+- `Sheet` (drawer mobile) baru — perlu diuji di HP nyata (buka/tutup, fokus trap,
+  tombol Keluar di dalam drawer).
+- Rollback: `git revert` commit U1; navbar lama masih ada di `git log`.
