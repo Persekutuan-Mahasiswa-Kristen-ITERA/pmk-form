@@ -1,7 +1,7 @@
 /**
- * In-memory rate limiter (fixed window per key).
+ * In-memory rate limiter (fixed window per key) — FALLBACK ONLY.
  *
- * CARA PAKAI: {@link rateLimit} dengan key unik per sumber daya, mis.
+ * CARA PAKAI: {@link rateLimit} dengan key unik per sumber daya, mis.\
  * `rateLimit("submit:" + ip, 10, 60_000)` atau `rateLimit("cekhasil:" + ip, 15, 60_000)`.
  *
  * !!! KEKURANGAN IN-MEMORY LIMITER (baca sebelum andalkan ini) !!!
@@ -11,8 +11,12 @@
  * instance saat scale-out, jadi penyerang yang request menyebar ke banyak
  * instance mendapat kuota penuh PER instance. Ini lapisan pertahanan PERTAMA
  * (menghambat brute-force & spam naif), BUKAN pengganti rate limiting
- * terdistribusi (Upstash, Redis, atau KV) untuk beban produksi yang
- * sesungguhnya. Pertimbangkan migrasi ke store eksternal di fase berikutnya.
+ * terdistribusi (Upstash Redis, atau KV) untuk beban produksi yang
+ * sesungguhnya.
+ *
+ * Fase 8-3: Jika env UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
+ * tersedia, rateLimit() otomatis menggunakan Upstash (terdistribusi, andal
+ * di serverless). Jika tidak, gunakan in-memory (lapisan pertama).
  *
  * Selain itu, pembersihan entri kedaluwarsa (lihat MAX_ENTRIES) hanya
  * berjalan saat map penuh. Pada beban rendah entri kedaluwarsa menetap di
@@ -34,8 +38,60 @@ const MAX_ENTRIES = 10_000;
 /**
  * Returns true jika key ini sudah melampaui `limit` dalam window `windowMs`.
  * Tidak throws; pemanggil menentukan respons (mis. HTTP 429).
+ *
+ * Fase 8-3: Jika UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN tersedia,
+ * gunakan Upstash Redis (terdistribusi, andal di serverless). Jika gagal
+ * atau tidak dikonfigurasi, fallback ke in-memory limiter (async wrapper).
  */
-export function rateLimit(key: string, limit: number, windowMs: number): boolean {
+export async function rateLimit(key: string, limit: number, windowMs: number): Promise<boolean> {
+  // Coba Upstash dulu jika dikonfigurasi
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    try {
+      return await rateLimitUpstash(key, limit, windowMs);
+    } catch (err) {
+      console.warn("[rate-limit] Upstash gagal, fallback ke in-memory:", err instanceof Error ? err.message : "unknown");
+    }
+  }
+  // Fallback: in-memory (synchronous)
+  return rateLimitMemory(key, limit, windowMs);
+}
+
+/**
+ * Upstash Redis rate limiter — sliding window log.
+ * Menggunakan atomic script untuk thread-safety di lingkungan serverless.
+ */
+async function rateLimitUpstash(key: string, limit: number, windowMs: number): Promise<boolean> {
+  const now = Date.now();
+  const windowSec = Math.ceil(windowMs / 1000);
+  const url = `${process.env.UPSTASH_REDIS_REST_URL}/pipeline`;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN as string;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify([
+      // Hapus entry kadaluarsa, tambahkan request baru, cek count, set expiry
+      ["ZREMRANGEBYSCORE", key, 0, now - windowMs],
+      ["ZADD", key, now, `${now}-${Math.random()}`],
+      ["ZCARD", key],
+      ["EXPIRE", key, windowSec],
+    ]),
+    cache: "no-store",
+    next: { tags: [`rl:${key}`] },
+  });
+
+  if (!res.ok) throw new Error(`Upstash HTTP ${res.status}`);
+  const results = await res.json() as unknown[];
+  // results[2] = ZCARD result (count setelah insert)
+  const count = typeof results[2] === "number" ? results[2] : 0;
+  return count > limit;
+}
+
+/** In-memory rate limiter (synchronous) — fallback, lihat JSDoc di atas. */
+function rateLimitMemory(key: string, limit: number, windowMs: number): boolean {
   const now = Date.now();
 
   // Buang entri kedaluwarsa. Dijalankan hanya saat map mendekati penuh agar

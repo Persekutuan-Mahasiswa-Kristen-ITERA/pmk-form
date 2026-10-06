@@ -91,7 +91,16 @@ export function buildFormSchema(fields: FieldConfig[]) {
           chain = chain.max(v.maxLength, v.customMessage ?? `${field.label} maksimal ${v.maxLength} karakter.`);
         }
         if (v.pattern) {
-          chain = chain.regex(new RegExp(v.pattern), v.patternMessage ?? v.customMessage ?? `${field.label} format tidak valid.`);
+          // Fase 8-2: sanitasi pattern sebelum new RegExp untuk mencegah ReDoS.
+          // Hanya izinkan karakter regex dasar; tolak pola dengan nesting
+          // berlebihan (indikator ReDoS) atau karakter berbahaya.
+          const safePattern = sanitizeRegexPattern(v.pattern);
+          if (safePattern) {
+            chain = chain.regex(
+              new RegExp(safePattern),
+              v.patternMessage ?? v.customMessage ?? `${field.label} format tidak valid.`
+            );
+          }
         }
         shape[field.id] = chain;
       }
@@ -99,4 +108,31 @@ export function buildFormSchema(fields: FieldConfig[]) {
   }
 
   return z.object(shape);
+}
+
+/**
+ * Sanitasi pola regex dari konfigurasi form agar tidak rentan ReDoS.
+ *
+ * Masalah: `new RegExp(field.validation.pattern)` langsung dari input admin
+ * bisa berisi nested quantifiers (mis. `(a+)+`) yang menyebabkan ReDoS.
+ *
+ * Pendekatan defensif:
+ * 1. Tolak pola > 200 karakter (berbahaya / mungkin rekursif).
+ * 2. Tolak pola yang mengandung nesting quantifier berbahaya:
+ *    pola seperti `(a+)+`, `(a*)+`, `(a{1,3}){1,3}` dsb.
+ * 3. Hanya izinkan karakter regex standar; tolak escape sequence mencurigakan.
+ *
+ * Jika pola tidak lolos, kembalikan null — caller akan lewati regex validasi
+ * dan hanya memakai minLength/maxLength (kegagalan aman, bukan crash).
+ */
+const REGEX_MAX_LEN = 200;
+const NESTED_QUANTIFIER_RE = /\([^)]*[+*{][^)]*\)[+*{]/;
+
+export function sanitizeRegexPattern(pattern: string): string | null {
+  if (typeof pattern !== "string" || pattern.length === 0) return null;
+  if (pattern.length > REGEX_MAX_LEN) return null;
+  if (NESTED_QUANTIFIER_RE.test(pattern)) return null;
+  // Tolak escape sequence mencurigakan (null byte, unicode hack)
+  if (pattern.includes("\\x") || pattern.includes("\\u") || pattern.includes("\0")) return null;
+  return pattern;
 }

@@ -8,7 +8,7 @@ import { getAllForms, countResponsesForForms, countActiveForms } from "@/lib/for
 import { FormQuickActions } from "@/components/FormQuickActions";
 import type { Form, FormType } from "@/types/forms";
 
-export const revalidate = 0; // Dynamic route
+export const revalidate = 60; // Fase 8-4: ISR 60s (dulunya 0 = no cache)
 
 export default async function FormsAdminPage({
   searchParams,

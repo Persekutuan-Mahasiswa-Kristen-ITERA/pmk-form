@@ -107,10 +107,10 @@ export async function submitFormResponseAction(input: {
 }) {
   try {
     // Rate limit dasar per IP untuk menghambat spam/brute-force submit.
-    // Lihat catatan di lib/rate-limit: in-memory limiter tidak andal lintas
-    // instance serverless; ini lapisan pertahanan pertama saja.
+    // Fase 8-3: rateLimit() sekarang async & bisa memakai Upstash Redis
+    // bila dikonfigurasi (env UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN).
     const ip = getClientIp(await headers());
-    if (rateLimit(`submit:${ip}`, 10, 60_000)) {
+    if (await rateLimit(`submit:${ip}`, 10, 60_000)) {
       return {
         success: false as const,
         error: "Terlalu banyak pengiriman. Silakan tunggu beberapa saat.",

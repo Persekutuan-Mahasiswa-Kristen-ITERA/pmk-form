@@ -22,8 +22,45 @@ const ALLOWED_FILE_TYPES = new Set([
 // Ekstensi yang diizinkan (cek tambahan selain MIME type, karena MIME bisa
 // dipalsukan client). Harus cocok dengan allowed_mime_types bucket di migration 005.
 const ALLOWED_EXTENSIONS = new Set(["pdf", "jpg", "jpeg", "png", "doc", "docx"]);
+
+// Fase 8-2: mapping MIME-to-extension untuk validasi konsistensi.
+// Jika client mengklaim MIME = "application/pdf" tapi ekstensi .jpg, tolak.
+// Ini mencegah kliker yang sengaja mengirim MIME palsu untuk bypass filter.
+const MIME_TO_EXT: Record<string, string[]> = {
+  "application/pdf": ["pdf"],
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+  "application/msword": ["doc"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"],
+};
+
 // Regex UUID v4 untuk memastikan formId berbentuk UUID sebelum dipakai di path.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Validasi MIME-to-extension consistency dan reject extensionless files.
+ * Fase 8-2: mencegah upload file dengan MIME palsu atau tanpa ekstensi.
+ */
+function validateFileType(file: File): string | null {
+  if (!file.name.includes(".")) return "Nama file harus memiliki ekstensi.";
+
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (!ALLOWED_EXTENSIONS.has(extension)) {
+    return "Ekstensi file tidak didukung. Gunakan PDF, JPG, PNG, DOC, atau DOCX.";
+  }
+
+  if (!ALLOWED_FILE_TYPES.has(file.type)) {
+    return "Tipe file tidak didukung. Gunakan PDF, JPG, PNG, DOC, atau DOCX.";
+  }
+
+  // Konsistensi MIME vs ekstensi (cek tambahan, Fase 8-2)
+  const expectedExts = MIME_TO_EXT[file.type];
+  if (expectedExts && !expectedExts.includes(extension)) {
+    return "Tipe file dan ekstensi tidak cocok. Pastikan Anda mengunggah file yang benar.";
+  }
+
+  return null; // valid
+}
 
 /**
  * Upload an attachment for a generic form response.
@@ -40,10 +77,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function uploadFormAttachment(formData: FormData) {
   try {
     // F2-8: rate limit per IP sebelum memproses apapun (menghambat spam upload
-    // yang mengisi kuota bucket). Lihat catatan di lib/rate-limit: in-memory
-    // limiter tidak andal lintas instance serverless; ini lapisan pertama.
+    // yang mengisi kuota bucket). Fase 8-3: rateLimit() async + optional Upstash.
     const ip = getClientIp(await headers());
-    if (rateLimit(`upload:${ip}`, UPLOAD_RATE_LIMIT, UPLOAD_RATE_WINDOW_MS)) {
+    if (await rateLimit(`upload:${ip}`, UPLOAD_RATE_LIMIT, UPLOAD_RATE_WINDOW_MS)) {
       return {
         success: false as const,
         error: "Terlalu banyak upload. Silakan tunggu beberapa saat.",
@@ -64,19 +100,14 @@ export async function uploadFormAttachment(formData: FormData) {
       throw new Error("ID form tidak valid.");
     }
 
-    if (!ALLOWED_FILE_TYPES.has(file.type)) {
-      throw new Error("Tipe file tidak didukung. Gunakan PDF, JPG, PNG, DOC, atau DOCX.");
-    }
-
-    // Ekstensi nama file diperiksa terpisah dari MIME karena client bisa
-    // mengirim MIME palsu dengan ekstensi berbeda.
-    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-    if (!ALLOWED_EXTENSIONS.has(extension)) {
-      throw new Error("Ekstensi file tidak didukung. Gunakan PDF, JPG, PNG, DOC, atau DOCX.");
-    }
-
+    // Fase 8-2: validasi MIME-to-extension consistency + reject extensionless
     if (file.size > MAX_FILE_SIZE) {
       throw new Error("Ukuran file terlalu besar. Maksimum 10 MB.");
+    }
+
+    const typeError = validateFileType(file);
+    if (typeError) {
+      throw new Error(typeError);
     }
 
     const safeRespondentKey = String(respondentKey)

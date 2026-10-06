@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Users, Briefcase, FileText, PlusCircle, ArrowRight, Calendar, BarChart3 } from "lucide-react";
 
-export const revalidate = 0;
+export const revalidate = 60; // Fase 8-4: ISR 60s (dulunya 0 = no cache)
 
 export default async function DashboardPage() {
   // F2-1: data-access layer tunggal — pakai getAllForms() (sudah requireAdmin).

@@ -63,7 +63,15 @@ export async function audit(
   });
 
   if (error) {
-    throw new Error(`Gagal mencatat audit log: ${error.message}`);
+    // Gunakan format yang aman: hindari string concatenation dengan variabel
+    // yang bisa mengandung format specifier (%s, %d, %j — berbahaya bila
+    // nilai error mengandung karakter tersebut). Pakai JSON.stringify untuk
+    // detail, bukan interpolation langsung.
+    const safeMsg = JSON.stringify({
+      code: error.code ?? null,
+      message: "audit log insert failed",
+    });
+    throw new Error(`Gagal mencatat audit log: ${safeMsg}`);
   }
 }
 
