@@ -942,3 +942,82 @@ diarahkan ke login oleh proxy (307).
   mobile, imbangi tombol naik/turun yang lebih dapat diandalkan.
 - ResponsiveTable me-render children client (`FormQuickActions`) — komponen
   induk tetap server component; Next menangani ini dengan benar (build OK).
+
+---
+
+## UI OVERHAUL — U5: QA dan polish (branch `chore/ui-qa`) — FINAL
+
+**Status:** selesai. UI Overhaul U1–U5 lengkap.
+
+Verifikasi: tsc ✓, eslint 0 error/warning, 69 unit test ✓, build ✓ (15 route),
+overflow horizontal **nol** di 360px & 390px, target sentuh **0 yang <44px** di
+390px (landing/form/login), verifikasi visual desktop+mobile lolos.
+
+### Perubahan U5
+
+**Target sentuh & input (kriteria penerimaan §8)**
+- `components/ui/button.tsx`: default `h-11`, sm `h-11`, lg `h-12`, icon
+  `h-11 w-11` (semua ≥44px — sebelumnya 32–40px).
+- `components/ui/input.tsx`: `h-9`→`h-11` (44px), tetap `text-base` (16px,
+  cegah zoom otomatis iOS saat fokus).
+- `FilterChip` (landing & admin) `min-h-[44px]` — sebelumnya **29px**, di bawah
+  standar sentuh; chip tetap proporsional (cek visual lolos).
+- `FormCard` CTA "Isi Form"/"Daftar Sekarang" `min-h-[44px]` (sebelumnya 36px).
+- Link header `PublicShell` `min-h-[44px]` (sebelumnya 33px).
+- `FormQuickActions`, `GenericResponseTable` (detail/hapus), opsi builder:
+  `min-h-[44px] min-w-[44px]`.
+
+**Aksesibilitas**
+- **Setiap halaman tepat satu `<h1>`**: judul form publik (`GenericFormRenderer`)
+  & "Admin Portal" (`login`) diubah dari `CardTitle` (yang me-render `<div>`)
+  menjadi `<h1>`; halaman admin mendapat `<h1>` dari `PageHeader`, `SectionCard`
+  memakai `<h2>`.
+- **Semua tombol ikon sekarang punya `aria-label`**, bukan hanya `title`
+  (`FormQuickActions`, `GenericResponseTable`, `AdminUsersClient`,
+  `GenericFormBuilder` naik/turun/duplikat/hapus-opsi).
+
+**QA & dokumen**
+- `window.confirm()`/`alert()` native: **0** di seluruh repo (backfill Sheets
+  adalah yang terakhir, diperbaiki di U4).
+- Tidak ada komponen tak terpakai; tidak ada dependency baru (`package.json`
+  tidak berubah dari main).
+- `docs/UI_GUIDE.md` dibuat: prinsip, daftar komponen bersama, pola responsif
+  (44px, safe-area, TouchSensor bukan PointerSensor), cara menambah halaman
+  publik/admin, daftar 404/error/loading, checklist verifikasi 7 langkah.
+- `README.md`: hapus referensi `/hasil` (route **tidak pernah dibuat** —
+  lihat catatan U3) + tambahkan admin routes yang benar & link UI_GUIDE.
+- Test tanggal (`tests/format.test.ts`, `tests/form-status.test.ts`) yang
+  hardcode 2026-10-06/07 diubah jadi relatif `Date.now()` — test gagal karena
+  tanggal lewat, **bukan bug kode**; `formatDate`/`bucketizeByMonth` tetap
+  pakai timestamp tetap (deterministik, tidak terpengaruh).
+
+### Checklist kriteria penerimaan (§8 prompt)
+
+- [x] Warna, font, logo identik — tidak ada token baru tanpa catatan di
+      `DESIGN_TOKENS.md`.
+- [x] Tidak ada scroll horizontal di 360px & 390px (CDP: `scrollWidth ===
+      innerWidth` di semua route publik).
+- [x] Target sentuh ≥44px (CDP: 0 elemen <44px di landing/form/login 390px;
+      button/input dasar diatur ke 44px).
+- [x] Input 16px+ (input.tsx `text-base`); `min-h-dvh` + safe-area di bar
+      bawah form/builder.
+- [x] Dashboard sesuai referensi: grafik data nyata + skeleton + empty state +
+      alternatif aksesibel (tombol 6/12 bulan + tabel sr-only).
+- [x] Tidak ada tombol palsu; aksi destruktif pakai ConfirmDialog; otorisasi
+      server (`requireAdmin`/RLS) tidak berubah sama sekali.
+- [x] 404 global, 404 form, error, 403, loading, empty state ada, bermerek,
+      tanpa kebocoran teknis.
+- [x] Semua halaman punya state loading/kosong/error.
+- [x] tsc, eslint, build bersih; tidak ada secret/PII baru (env service-account
+      hanya email publik, private key tidak pernah ke client).
+- [x] Tidak ada dependency baru.
+
+### Risiko/regresi
+
+- Tombol & input dasar jadi lebih tinggi (36→44px): layout padat di tabel
+  admin/`FormQuickActions` bisa terlihat sedikit berbeda — cek visual lolos,
+  tidak ada overflow baru.
+- `h-11` pada input file/upload: tombol "Choose file" diikuti tinggi input,
+  bukan masalah (border-box).
+- Test sekarang memakai `Date.now()` untuk kasus relatif — deterministik untuk
+  selisih hari, tidak untuk tanggal mutlak (sengaja).
