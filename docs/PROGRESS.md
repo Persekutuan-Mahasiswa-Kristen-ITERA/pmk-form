@@ -857,3 +857,88 @@ gagal — `minimax-m3` EOL; desktop & form-mobile berhasil dianalisis)
 - Sticky bar memakai `form="main-form"` — tombol submit di luar `<form>`;
   FITUR INI butuh browser modern (semua browser target 2026 mendukungnya).
 - Rollback: `git revert` commit U3 (2 commit).
+
+---
+
+## UI OVERHAUL — U4: Halaman admin lainnya (branch `feat/ui-admin-pages`)
+
+**Status:** selesai. Verifikasi: tsc ✓, eslint 0 error/warning (dibersihkan juga
+warning `ChartData` di dashboard), 69 unit test ✓, build ✓ (15 route),
+overflow horizontal nol di 390/768/1280px (CDP), `/admin/*` tanpa login tetap
+diarahkan ke login oleh proxy (307).
+
+### File yang dirombak
+
+**`app/admin/login/page.tsx`**
+- `min-h-screen` → `min-h-dvh` + padding `env(safe-area-inset-*)` (iPhone notch).
+- Judul "Admin Portal" diubah dari `CardTitle` (yang render `<div>`) menjadi
+  `<h1>` — aksesibilitas hierarki heading; setiap halaman admin sekarang punya
+  tepat satu `<h1>` (dari `PageHeader` atau halaman ini).
+- Tidak membocorkan apakah email ada di allowlist (pesan aman sudah ada).
+
+**`app/admin/(dashboard)/forms/page.tsx`** (penyimpanan terbesar, 248 baris)
+- `PageHeader` + dua `StatCard` + toolbar `FilterChip` (scroll horizontal mobile)
+  + `ResponsiveTable` (tabel desktop / kartu mobile) + `EmptyState` bertingkat.
+- `FormAdminCard` lama dihapus — menduplikasi badge & status; semua status &
+  kategori sekarang lewat `StatusBadge`/`CategoryBadge` (status selalu ada teks,
+  aturan 3.G).
+- Aksi baris tetap memakai `FormQuickActions` sungguhan (toggle/duplikat/hapus).
+
+**`components/GenericFormBuilder.tsx`** (builder `/new` & `/[id]`)
+- **PointerSensor dihapus**, gantinya `TouchSensor` (delay 200ms/tolerance 8) +
+  `KeyboardSensor` — PointerSensor menyerap pointer-down sehingga tombol
+  Duplikat/Hapus di kartu field sulit ditekan di layar sentuh.
+- **Tombol naik/turun** (`ArrowUp`/`ArrowDown`) ditambahkan sebagai alternatif
+  drag yang aksesibel (label ARIA, disabled di batas) — memakai `arrayMove`.
+- **Bar aksi bawah sticky** + `env(safe-area-inset-bottom)`: tombol Simpan & link
+  Pratinjau selalu terjangkau di mobile; tombol submit di luar `<form>` memakai
+  `form="builder-form"` (didukung browser modern). `pb-40` memberi ruang.
+- Struktur data form/field TIDAK diubah (batasan prompt).
+
+**`components/GenericResponseTable.tsx`** (halaman responses)
+- Hapus respons sekarang memakai `ConfirmDialog` bermerek (sebelumnya
+  `confirm()` native), state `pendingDeleteId` + `isDeleting` untuk loading.
+- `resolveAnswer` tetap dipakai (tidak diubah).
+
+**`app/admin/(dashboard)/users/page.tsx` + `AdminUsersClient.tsx`**
+- `PageHeader`; kartu akses-ditolak ad-hoc diganti `AccessDeniedCard`.
+- Hapus admin memakai `ConfirmDialog` (sebelumnya `confirm()`).
+
+**`app/admin/(dashboard)/audit/page.tsx`**
+- `PageHeader` + `SectionCard` + `ResponsiveTable` + `EmptyState`; error load
+  tetap aman (hanya pesan generik). Otorisasi super_admin utuh.
+
+**`app/admin/(dashboard)/forms/trash/page.tsx`**
+- Header lama (border-b ad-hoc) diseragamkan ke `PageHeader` + tombol kembali.
+
+**`components/SheetsSettingsPanel.tsx`** (panel di halaman edit form)
+- Backfill sinkronisasi memakai `ConfirmDialog` — ini `confirm()` native
+  **terakhir** di seluruh repo. Sekarang nol `window.confirm()`/`alert()`.
+
+**`app/admin/(dashboard)/dashboard/page.tsx`**
+- Hapus import `type ChartData` yang tak terpakai (warning eslint U2 tersisa).
+
+### Audit konsistensi & aksesibilitas
+
+- `grep confirm(` → **0 implementasi** native tersisa (hanya komentar).
+- Hierarki heading: setiap halaman admin punya 1 `<h1>` (`PageHeader` / login),
+  `SectionCard` memakai `<h2>`.
+- `/admin/*` tanpa login → 307 ke `/admin/login` (proxy, tidak diubah);
+  404 publik & form-not-found tidak membocorkan rute admin.
+
+### Verifikasi CDP (390/768/1280)
+
+- Login: kartu centered, tanpa overflow, pesan aman. Lolos.
+- 404 global: judul serif + tombol beranda. Lolos.
+- Form-not-found: pesan aman ("Formulir tidak ditemukan atau sudah ditutup"),
+  tidak membedakan slug hilang vs form ditutup. Lolos.
+- Catatan: probe CDP pertama ke beberapa route menabrak error boundary saat
+  koneksi Supabase cold-start; ulangan sehat. Bukan regresi UI.
+
+### Risiko/regresi
+
+- Bar aksi builder memakai `form="builder-form"` — butuh browser modern.
+- TouchSensor dengan delay 200ms: drag jadi sedikit lebih lambat reaktif di
+  mobile, imbangi tombol naik/turun yang lebih dapat diandalkan.
+- ResponsiveTable me-render children client (`FormQuickActions`) — komponen
+  induk tetap server component; Next menangani ini dengan benar (build OK).
