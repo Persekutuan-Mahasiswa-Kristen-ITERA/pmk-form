@@ -130,11 +130,22 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
 
   const formSchema = z.object(schemaShape);
 
+  // U3: defaultValues string kosong (bukan {}) supaya Zod memunculkan pesan
+  // spesifik ("X wajib diisi.") alih-alih "Invalid input" generik saat field
+  // required dibiarkan kosong. File upload & checkbox-group tetap undefined.
+  const defaultValues: Record<string, unknown> = {};
+  fields.forEach((field) => {
+    if (field.type === "file_upload") return;
+    if (field.type === "checkbox" && field.options && field.options.length > 0) return;
+    if (field.type === "checkbox") return;
+    defaultValues[field.id] = "";
+  });
+
   const form = useForm({
     resolver: zodResolver(formSchema),
     mode: "onSubmit",
     reValidateMode: "onSubmit",
-    defaultValues: {} as Record<string, unknown>,
+    defaultValues,
   });
 
   const showProgress = genericForm.settings?.show_progress === true;
@@ -153,8 +164,10 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
   const onInvalid = () => {
     // requestAnimationFrame agar DOM sudah render pesan error sebelum scroll.
     requestAnimationFrame(() => {
+      // shadcn FormItem menandai field bermasalah lewat aria-invalid pada
+      // elemen input; label/FormItem sendiri tidak punya penanda lain.
       const firstError = document.querySelector(
-        '[data-invalid="true"], [role="alert"]',
+        '[aria-invalid="true"]',
       );
       if (firstError instanceof HTMLElement) {
         firstError.scrollIntoView({ behavior: "smooth", block: "center" });

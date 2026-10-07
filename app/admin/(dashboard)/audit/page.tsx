@@ -1,8 +1,11 @@
 import React from "react";
 import { getAuditLog, type AuditEntry } from "@/lib/audit";
 import { getAdminUser } from "@/lib/auth";
-import { Card, CardContent } from "@/components/ui/card";
-import { ShieldAlert, ScrollText } from "lucide-react";
+import { AccessDeniedCard } from "@/components/access-denied";
+import { PageHeader } from "@/components/page-header";
+import { SectionCard } from "@/components/section-card";
+import { EmptyState } from "@/components/empty-state";
+import { ResponsiveTable } from "@/components/responsive-table";
 
 /**
  * Halaman viewer audit log (Fase 7 item 5).
@@ -40,21 +43,7 @@ export default async function AuditLogPage() {
 
   if (!admin || admin.role !== "super_admin") {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Card className="max-w-md w-full border-t-8 border-t-destructive shadow-xl bg-white rounded-3xl">
-          <CardContent className="space-y-6 text-center pt-10 pb-10">
-            <div className="mx-auto w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
-              <ShieldAlert className="w-8 h-8 text-destructive" />
-            </div>
-            <div className="space-y-2">
-              <h1 className="font-serif text-2xl font-bold">Akses Ditolak</h1>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Audit log hanya untuk super admin.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <AccessDeniedCard message="Audit log hanya untuk super admin." />
     );
   }
 
@@ -67,62 +56,62 @@ export default async function AuditLogPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-16">
-      <div className="flex items-center gap-3 border-b pb-4">
-        <ScrollText className="w-7 h-7 text-primary" />
-        <div>
-          <h1 className="font-serif text-2xl font-bold">Audit Log</h1>
-          <p className="text-xs text-muted-foreground">
-            Jejak semua aksi admin penting. Append-only — tidak bisa diubah atau dihapus.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Audit Log"
+        subtitle="Jejak semua aksi admin penting. Append-only — tidak bisa diubah atau dihapus."
+      />
 
       {loadError ? (
-        <Card className="bg-destructive/5 border-destructive/30">
-          <CardContent className="p-6 text-sm text-destructive">{loadError}</CardContent>
-        </Card>
-      ) : entries.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center text-muted-foreground text-sm">
-            Belum ada aksi yang tercatat.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                <th className="py-3 pr-4 font-semibold">Waktu</th>
-                <th className="py-3 pr-4 font-semibold">Aksi</th>
-                <th className="py-3 pr-4 font-semibold">Oleh</th>
-                <th className="py-3 pr-4 font-semibold">Target</th>
-                <th className="py-3 font-semibold">Detail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.id} className="border-b last:border-0 align-top">
-                  <td className="py-3 pr-4 text-xs text-muted-foreground whitespace-nowrap">
-                    {new Date(entry.created_at).toLocaleString("id-ID")}
-                  </td>
-                  <td className="py-3 pr-4">
-                    <span className="inline-block rounded-lg bg-primary/5 border border-primary/20 px-2 py-1 text-xs font-medium">
-                      {ACTION_LABELS[entry.action] ?? entry.action}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4 text-xs">{entry.actor_email ?? "-"}</td>
-                  <td className="py-3 pr-4 text-xs">{entry.target_email ?? "-"}</td>
-                  <td className="py-3 text-xs font-mono text-muted-foreground break-all">
-                    {Object.keys(entry.detail ?? {}).length > 0
-                      ? JSON.stringify(entry.detail)
-                      : "-"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+          {loadError}
         </div>
+      ) : entries.length === 0 ? (
+        <EmptyState
+          title="Belum ada aksi yang tercatat"
+          description="Aktivitas admin (buat/edit form, undang admin, hapus respons) akan muncul di sini."
+        />
+      ) : (
+        <SectionCard title={`${entries.length} entri terbaru`}>
+          <ResponsiveTable
+            caption="Audit log"
+            columns={[
+              { header: "Waktu" },
+              { header: "Aksi" },
+              { header: "Oleh" },
+              { header: "Target" },
+              { header: "Detail" },
+            ]}
+            rows={entries.map((entry) => [
+              <span
+                key="waktu"
+                className="whitespace-nowrap text-xs text-muted-foreground"
+              >
+                {new Date(entry.created_at).toLocaleString("id-ID")}
+              </span>,
+              <span
+                key="aksi"
+                className="inline-block rounded-lg border border-primary/20 bg-primary/5 px-2 py-1 text-xs font-medium"
+              >
+                {ACTION_LABELS[entry.action] ?? entry.action}
+              </span>,
+              <span key="oleh" className="text-xs">
+                {entry.actor_email ?? "-"}
+              </span>,
+              <span key="target" className="text-xs">
+                {entry.target_email ?? "-"}
+              </span>,
+              <span
+                key="detail"
+                className="break-all font-mono text-xs text-muted-foreground"
+              >
+                {Object.keys(entry.detail ?? {}).length > 0
+                  ? JSON.stringify(entry.detail)
+                  : "-"}
+              </span>,
+            ])}
+          />
+        </SectionCard>
       )}
     </div>
   );

@@ -1,15 +1,29 @@
-import React from "react";
 import Link from "next/link";
-import { Plus, FileText, Users, Eye, Edit, Calendar, Filter, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { getAllForms, countResponsesForForms, countActiveForms } from "@/lib/forms";
 import { FormQuickActions } from "@/components/FormQuickActions";
-import type { Form, FormType } from "@/types/forms";
+import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
+import { StatusBadge, CategoryBadge } from "@/components/badges";
+import { ResponsiveTable } from "@/components/responsive-table";
+import { EmptyState } from "@/components/empty-state";
+import type { FormType } from "@/types/forms";
 
 export const revalidate = 60; // Fase 8-4: ISR 60s (dulunya 0 = no cache)
 
+/**
+ * Halaman daftar formulir admin (UI Overhaul U4).
+ *
+ * Prompt: header "Formulir" + "Buat formulir"; toolbar pencarian + FilterChip
+ * kategori + filter status; daftar memakai pola baris/kartu yang sama dengan
+ * dashboard; empty state; paginasi/"muat lebih banyak" bila banyak.
+ *
+ * Konsistensi U4: header via `PageHeader`, statistik via `StatCard`, status &
+ * kategori via `StatusBadge`/`CategoryBadge` (status selalu ada teksnya —
+ * aturan referensi 3.G), daftar via `ResponsiveTable` (tabel di desktop, kartu
+ * di mobile).
+ */
 export default async function FormsAdminPage({
   searchParams,
 }: {
@@ -35,77 +49,124 @@ export default async function FormsAdminPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Manajemen Form</h1>
-          <p className="text-muted-foreground">
-            Kelola seluruh jenis form (presensi, survei, event, recruitment)
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link href="/admin/forms/trash">
-            <Button variant="outline">
-              <Trash2 className="w-4 h-4 mr-2" /> Sampah
+      <PageHeader
+        title="Formulir"
+        subtitle="Kelola seluruh jenis form (presensi, survei, event, recruitment)"
+        actions={
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link href="/admin/forms/trash">
+                <Trash2 className="mr-2 h-4 w-4" /> Sampah
+              </Link>
             </Button>
-          </Link>
-          <Link href="/admin/forms/new">
-            <Button className="bg-primary">
-              <Plus className="w-4 h-4 mr-2" /> Buat Form Baru
+            <Button asChild className="w-full bg-primary sm:w-auto">
+              <Link href="/admin/forms/new">
+                <Plus className="mr-2 h-4 w-4" /> Buat formulir
+              </Link>
             </Button>
-          </Link>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="text-xs">Total Form</CardDescription>
-            <CardTitle className="text-2xl">{totalForms}</CardTitle>
-          </CardHeader>
-        </Card>
+      <dl className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Total form" value={totalForms ?? 0} />
+        <StatCard
+          label="Form aktif"
+          value={activeCount}
+          description={`dari ${totalForms ?? 0} formulir`}
+        />
+      </dl>
 
-        <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="text-xs">Form Buka / Aktif</CardDescription>
-            <CardTitle className="text-2xl text-emerald-600">{activeCount}</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
-
-      <div className="flex items-center gap-2 border-b pb-3 overflow-x-auto">
-        <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
-        <span className="text-xs font-medium text-muted-foreground mr-2">Filter Jenis:</span>
-        <FilterChip label="Semua" href="/admin/forms" active={!selectedType} />
-        <FilterChip label="Recruitment" href="/admin/forms?type=recruitment" active={selectedType === "recruitment"} />
-        <FilterChip label="Event" href="/admin/forms?type=event" active={selectedType === "event"} />
-        <FilterChip label="Survei" href="/admin/forms?type=survey" active={selectedType === "survey"} />
-        <FilterChip label="Presensi" href="/admin/forms?type=presensi" active={selectedType === "presensi"} />
-        <FilterChip label="Umum" href="/admin/forms?type=general" active={selectedType === "general"} />
+      {/* Toolbar filter jenis — scroll horizontal di mobile */}
+      <div className="flex items-center gap-2 overflow-x-auto border-b pb-3">
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">
+          Filter jenis:
+        </span>
+        {CATEGORY_FILTERS.map((cat) => (
+          <FilterChip
+            key={cat.value}
+            label={cat.label}
+            href={cat.value === "all" ? "/admin/forms" : `/admin/forms?type=${cat.value}`}
+            active={cat.value === "all" ? !selectedType : selectedType === cat.value}
+          />
+        ))}
       </div>
 
       {formsWithCounts.length === 0 ? (
-        <Card className="p-8 text-center border-dashed">
-          <p className="text-muted-foreground text-sm">
-            Belum ada form untuk filter ini. Klik &quot;Buat Form Baru&quot; untuk menambahkan.
-          </p>
-        </Card>
+        <EmptyState
+          title={
+            selectedType
+              ? "Tidak ada form untuk kategori ini"
+              : "Belum ada form"
+          }
+          description={
+            selectedType
+              ? "Coba kategori lain, atau buat formulir baru untuk kategori ini."
+              : "Buat formulir pertamamu untuk mulai menerima respons."
+          }
+          action={
+            <Button asChild className="bg-primary">
+              <Link href="/admin/forms/new">
+                <Plus className="mr-2 h-4 w-4" /> Buat formulir
+              </Link>
+            </Button>
+          }
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {formsWithCounts.map((form) => (
-            <FormAdminCard key={form.id} form={form} />
-          ))}
-        </div>
+        <ResponsiveTable
+          caption="Daftar formulir"
+          columns={[
+            { header: "Formulir" },
+            { header: "Kategori", className: "w-[110px]" },
+            { header: "Status", className: "w-[140px]" },
+            { header: "Respons", className: "w-[90px] text-right" },
+            { header: "Aksi", className: "w-[170px] text-right" },
+          ]}
+          rows={formsWithCounts.map((form) => [
+            <Link
+              key={form.id}
+              href={`/admin/forms/${form.id}`}
+              className="font-semibold text-foreground hover:text-primary hover:underline"
+            >
+              {form.title}
+            </Link>,
+            <CategoryBadge key="cat" value={form.form_type} />,
+            <StatusBadge key="status" form={form} />,
+            <Link
+              key="resp"
+              href={`/admin/forms/${form.id}/responses`}
+              className="text-right font-bold tabular-nums text-foreground hover:text-primary hover:underline"
+            >
+              {form.responseCount}
+            </Link>,
+            <div key="aksi" className="flex justify-end gap-1.5">
+              <FormQuickActions
+                formId={form.id}
+                isOpen={form.is_open}
+                responseCount={form.responseCount}
+              />
+            </div>,
+          ])}
+        />
       )}
     </div>
   );
 }
 
+const CATEGORY_FILTERS: { label: string; value: FormType | "all" }[] = [
+  { label: "Semua", value: "all" },
+  { label: "Recruitment", value: "recruitment" },
+  { label: "Event", value: "event" },
+  { label: "Survei", value: "survey" },
+  { label: "Presensi", value: "presensi" },
+  { label: "Umum", value: "general" },
+];
+
 function FilterChip({ label, href, active }: { label: string; href: string; active: boolean }) {
   return (
     <Link
       href={href}
-      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors shrink-0 ${
+      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
         active
           ? "bg-primary text-primary-foreground"
           : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
@@ -113,70 +174,5 @@ function FilterChip({ label, href, active }: { label: string; href: string; acti
     >
       {label}
     </Link>
-  );
-}
-
-function FormAdminCard({ form }: { form: Form & { responseCount: number } }) {
-  const isExpired = new Date(form.close_date) < new Date();
-
-  return (
-    <Card className="flex flex-col justify-between hover:shadow-md transition-shadow">
-      <CardHeader className="p-4 pb-2 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <Badge variant={form.form_type === "recruitment" ? "default" : "outline"} className="capitalize text-[10px]">
-            {form.form_type}
-          </Badge>
-
-          <Badge
-            variant={form.is_open && !isExpired ? "default" : "secondary"}
-            className={form.is_open && !isExpired ? "bg-emerald-600 hover:bg-emerald-700" : ""}
-          >
-            {form.is_open && !isExpired ? "Buka" : "Tutup"}
-          </Badge>
-        </div>
-
-        <CardTitle className="text-lg font-bold line-clamp-1">{form.title}</CardTitle>
-        <CardDescription className="text-xs line-clamp-2">
-          {form.description || "Tidak ada deskripsi."}
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="p-4 pt-2 space-y-3">
-        <div className="text-xs text-muted-foreground space-y-1">
-          <div className="flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5" />
-            <span>{form.responseCount} Respons</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>
-              Tutup: {new Date(form.close_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between border-t pt-3 gap-2">
-          <Link href={`/form/${form.slug}`} target="_blank" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-            <Eye className="w-3.5 h-3.5" /> Pratinjau
-          </Link>
-
-          <div className="flex items-center gap-1">
-            <FormQuickActions formId={form.id} isOpen={form.is_open} responseCount={form.responseCount} />
-
-            <Link href={`/admin/forms/${form.id}/responses`}>
-              <Button variant="outline" size="sm" className="h-8 text-xs">
-                <FileText className="w-3.5 h-3.5 mr-1" /> Respons ({form.responseCount})
-              </Button>
-            </Link>
-
-            <Link href={`/admin/forms/${form.id}`}>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <Edit className="w-3.5 h-3.5" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

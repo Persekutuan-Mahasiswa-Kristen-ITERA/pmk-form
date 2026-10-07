@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   inviteAdminAction,
@@ -62,10 +63,15 @@ export function AdminUsersClient({
     });
   };
 
+  const [pendingDelete, setPendingDelete] = useState<AdminMember | null>(null);
+
   const handleDelete = (member: AdminMember) => {
-    if (!confirm(`Hapus ${member.email} dari daftar admin? Akses admin mereka akan dicabut.`)) {
-      return;
-    }
+    setPendingDelete(member);
+  };
+
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    const member = pendingDelete;
     startTransition(async () => {
       const res = await deleteAdminAction(member.id);
       toast({
@@ -73,6 +79,7 @@ export function AdminUsersClient({
         description: res.success ? `${member.email} dihapus dari allowlist.` : res.error,
         variant: res.success ? "default" : "destructive",
       });
+      setPendingDelete(null);
     });
   };
 
@@ -185,6 +192,24 @@ export function AdminUsersClient({
           )}
         </CardContent>
       </Card>
+
+      {/* U4: konfirmasi hapus admin memakai dialog bermerek (batasan 6). */}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title="Hapus admin ini?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.email} akan dihapus dari allowlist. Akses admin mereka akan dicabut segera.`
+            : ""
+        }
+        confirmLabel="Hapus"
+        destructive
+        pending={pending}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

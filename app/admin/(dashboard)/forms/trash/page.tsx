@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAllForms, countFormResponses } from "@/lib/forms";
 import { TrashFormsClient } from "@/components/TrashFormsClient";
+import { PageHeader } from "@/components/page-header";
 import type { Form } from "@/types/forms";
 
 /**
@@ -33,21 +34,18 @@ export default async function TrashPage() {
   const countsMap: Record<string, number> = Object.fromEntries(counts);
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-16">
-      <div className="flex items-center gap-3 border-b pb-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/forms">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Kembali
-          </Link>
-        </Button>
-        <div>
-          <h1 className="font-serif text-2xl font-bold">Sampah</h1>
-          <p className="text-xs text-muted-foreground">
-            Form yang dihapus tetapi masih memiliki respons. Data aman; bisa
-            dikembalikan kapan saja.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Sampah"
+        subtitle="Form yang dihapus tetapi masih memiliki respons. Data aman; bisa dikembalikan kapan saja."
+        actions={
+          <Button variant="outline" asChild className="w-full sm:w-auto">
+            <Link href="/admin/forms">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Kembali ke formulir
+            </Link>
+          </Button>
+        }
+      />
 
       <TrashFormsClient forms={deletedForms} counts={countsMap} />
     </div>

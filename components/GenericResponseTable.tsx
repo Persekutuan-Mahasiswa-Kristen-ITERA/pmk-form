@@ -26,6 +26,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Download, FileText, Trash2, Eye, ArrowLeft, Loader2, Filter } from "lucide-react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import Papa from "papaparse";
@@ -68,6 +69,9 @@ export function GenericResponseTable({
   const [isExportingCsv, setIsExportingCsv] = useState(false);
   const [isExportingZip, setIsExportingZip] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
+  // U4: konfirmasi hapus memakai ConfirmDialog (bukan window.confirm).
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   // Fase 7-3: filter status di tabel admin.
   const [statusFilter, setStatusFilter] = useState<ResponseStatus | "all">("all");
   const { toast } = useToast();
@@ -81,14 +85,17 @@ export function GenericResponseTable({
       : responses.filter((r) => (r.status ?? null) === statusFilter);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus respons ini?")) return;
+    setIsDeleting(true);
     try {
       await deleteFormResponseAction(id, form.id);
       setResponses((prev) => prev.filter((r) => r.id !== id));
       toast({ title: "Berhasil", description: "Respons berhasil dihapus." });
+      setPendingDeleteId(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal menghapus respons";
       toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -300,7 +307,7 @@ export function GenericResponseTable({
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-destructive"
-                            onClick={() => handleDelete(res.id)}
+                            onClick={() => setPendingDeleteId(res.id)}
                             title="Hapus"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -362,6 +369,24 @@ export function GenericResponseTable({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* U4: konfirmasi hapus respons memakai dialog bermerek, bukan
+          window.confirm() (batasan 6: aksi destruktif wajib konfirmasi
+          eksplisit). Otorisasi tetap di deleteFormResponseAction. */}
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null);
+        }}
+        title="Hapus respons ini?"
+        description="Respons yang dihapus tidak dapat dikembalikan. Data jawaban dan lampiran terkait akan hilang permanen."
+        confirmLabel="Hapus"
+        destructive
+        pending={isDeleting}
+        onConfirm={() => {
+          if (pendingDeleteId) handleDelete(pendingDeleteId);
+        }}
+      />
     </div>
   );
 }

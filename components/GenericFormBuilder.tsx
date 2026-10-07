@@ -6,7 +6,7 @@ import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -27,7 +27,11 @@ import {
   ArrowLeft,
   Copy,
   Settings as SettingsIcon,
+  ArrowUp,
+  ArrowDown,
+  Eye,
 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,11 +81,19 @@ function SortableFieldItem({
   onUpdate,
   onRemove,
   onDuplicate,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
 }: {
   field: FieldConfig;
   onUpdate: (updated: FieldConfig) => void;
   onRemove: () => void;
   onDuplicate: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: field.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -116,6 +128,10 @@ function SortableFieldItem({
           </span>
         </div>
         <div className="flex items-center gap-1">
+          {/* U4 aksesibilitas: tombol naik/turun sebagai alternatif drag
+              (prompt: "plus tombol naik/turun sebagai alternatif aksesibel"). */}
+          <Button type="button" variant="ghost" size="icon" onClick={onMoveUp} disabled={!canMoveUp} title="Naikkan posisi" aria-label="Naikkan posisi field"><ArrowUp className="w-4 h-4 text-muted-foreground" /></Button>
+          <Button type="button" variant="ghost" size="icon" onClick={onMoveDown} disabled={!canMoveDown} title="Turunkan posisi" aria-label="Turunkan posisi field"><ArrowDown className="w-4 h-4 text-muted-foreground" /></Button>
           <Button type="button" variant="ghost" size="icon" onClick={onDuplicate} title="Duplikat"><Copy className="w-4 h-4 text-muted-foreground" /></Button>
           <Button type="button" variant="ghost" size="icon" onClick={onRemove} title="Hapus"><Trash2 className="w-4 h-4 text-destructive" /></Button>
         </div>
@@ -190,7 +206,14 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"fields" | "settings">("fields");
 
-  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  // U4 mobile: PointerSensor keluarkan dari daftar sensor — di layar sentuh ia
+  // menyerap pointer-down sehingga tombol Duplikat/Hapus di dalam kartu field
+  // sulit ditekan. Gantinya TouchSensor (dengan delay) + KeyboardSensor, plus
+  // tombol naik/turun di SortableFieldItem sebagai alternatif aksesibel.
+  const sensors = useSensors(
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const generateSlug = (text: string) => text.toLowerCase().trim().replace(/[^a-z0-9 -]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-");
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => { const val = e.target.value; setTitle(val); if (!initialData) setSlug(generateSlug(val)); };
@@ -225,16 +248,19 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
   };
 
   return (
-    <form onSubmit={handleSave} className="space-y-6 max-w-5xl mx-auto pb-16">
+    <form
+      id="builder-form"
+      onSubmit={handleSave}
+      className="mx-auto max-w-5xl space-y-6 pb-40"
+    >
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-4">
         <div className="flex items-center gap-3">
           <Button type="button" variant="ghost" size="sm" onClick={() => router.push("/admin/forms")}><ArrowLeft className="w-4 h-4 mr-1" /> Kembali</Button>
           <div>
-            <h1 className="text-2xl font-bold">{initialData ? "Edit Form" : "Buat Form Baru"}</h1>
+            <h1 className="font-serif text-2xl font-bold text-foreground">{initialData ? "Edit Form" : "Buat Form Baru"}</h1>
             <p className="text-xs text-muted-foreground">Konfigurasi pertanyaan dan pengaturan form generik</p>
           </div>
         </div>
-        <Button type="submit" disabled={isSaving} className="bg-primary"><Save className="w-4 h-4 mr-2" />{isSaving ? "Menyimpan..." : "Simpan Form"}</Button>
       </div>
       <Card>
         <CardHeader><CardTitle className="text-lg">Informasi Dasar Form</CardTitle><CardDescription>Judul, jenis form, dan tanggal aktif</CardDescription></CardHeader>
@@ -265,7 +291,27 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
             {fields.length === 0 ? (<Card className="border-dashed p-8 text-center"><p className="text-muted-foreground text-sm">Belum ada pertanyaan. Pilih tipe field dari panel sebelah kiri.</p></Card>) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-                  {fields.map((field, idx) => (<SortableFieldItem key={field.id} field={field} onUpdate={(updated) => handleUpdateField(idx, updated)} onRemove={() => handleRemoveField(idx)} onDuplicate={() => handleDuplicateField(idx)} />))}
+                  {fields.map((field, idx) => (
+                    <SortableFieldItem
+                      key={field.id}
+                      field={field}
+                      onUpdate={(updated) => handleUpdateField(idx, updated)}
+                      onRemove={() => handleRemoveField(idx)}
+                      onDuplicate={() => handleDuplicateField(idx)}
+                      onMoveUp={() =>
+                        setFields((prev) =>
+                          idx > 0 ? arrayMove(prev, idx, idx - 1) : prev,
+                        )
+                      }
+                      onMoveDown={() =>
+                        setFields((prev) =>
+                          idx < prev.length - 1 ? arrayMove(prev, idx, idx + 1) : prev,
+                        )
+                      }
+                      canMoveUp={idx > 0}
+                      canMoveDown={idx < fields.length - 1}
+                    />
+                  ))}
                 </SortableContext>
               </DndContext>
             )}
@@ -333,6 +379,38 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
           </CardContent>
         </Card>
       )}
+
+      {/* U4 mobile: bar aksi bawah sticky — Simpan/Pratinjau selalu terjangkau,
+          aman safe-area, tidak tertutup keyboard. Tombol submit di luar form
+          memakai atribut `form` (didukung semua browser modern). */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3">
+          {initialData ? (
+            <Button
+              type="button"
+              variant="outline"
+              asChild
+              className="h-12 flex-1 sm:flex-none"
+            >
+              <Link href={`/form/${initialData.slug}`} target="_blank">
+                <Eye className="mr-2 h-4 w-4" /> Pratinjau
+              </Link>
+            </Button>
+          ) : null}
+          <Button
+            type="submit"
+            form="builder-form"
+            disabled={isSaving}
+            className="h-12 flex-1 bg-primary text-base font-semibold shadow-lg transition-transform hover:scale-[1.01] disabled:opacity-60"
+          >
+            <Save className="mr-2 h-4 w-4" />
+            {isSaving ? "Menyimpan…" : "Simpan Form"}
+          </Button>
+        </div>
+      </div>
     </form>
   );
 }

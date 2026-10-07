@@ -4,7 +4,6 @@ import {
   getResponseChartData,
   getMonthlyResponseStats,
   getTotalResponseCount,
-  type ChartData,
 } from "@/lib/dashboard";
 import { CLOSING_SOON_DAYS } from "@/lib/form-status";
 import { daysUntil } from "@/lib/format";
