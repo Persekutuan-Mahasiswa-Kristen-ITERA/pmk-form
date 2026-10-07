@@ -691,3 +691,76 @@ berubah (batasan 1).
 - `Sheet` (drawer mobile) baru — perlu diuji di HP nyata (buka/tutup, fokus trap,
   tombol Keluar di dalam drawer).
 - Rollback: `git revert` commit U1; navbar lama masih ada di `git log`.
+
+---
+
+## UI OVERHAUL — U2: Dashboard + shell admin (branch `feat/ui-admin-dashboard`)
+
+**Status:** selesai (build ✓, tsc ✓, eslint 0 warning, 69 unit test ✓), menunggu
+verifikasi visual di checkpoint U2.
+
+Sesuai bagian 3 prompt: dashboard dirombak memakai sistem desain U1
+(`PageHeader`, `SectionCard`, `StatCard`, `StatusBadge`/`CategoryBadge`,
+`ResponsiveTable`), plus grafik "Respons per periode" yang **sebelumnya kosong**
+(kerusakan referensi paling jelas — prompt 0) kini menampilkan data nyata.
+
+### File baru
+
+- `lib/dashboard.ts` — agregasi server-side. Query `form_responses` **hanya
+  memilih `submitted_at`** dan query `forms` hanya `open_date, created_at,
+  is_deleted` — tidak pernah mengambil `answers`/`files` (batasan 3.E prompt:
+  jangan tarik data responden untuk agregasi). Bucketing per bulan kalender
+  **WIB** lewat `lastMonths`/`bucketizeByMonth` (`lib/format.ts`), jadi "6 bulan
+  terakhir" konsisten terlepas dari zona server (Vercel = UTC). `getTotalResponseCount`
+  memakai `count: "exact"` + `head: true`.
+- `app/actions/dashboard-chart.ts` — `"use server"` wrapper. **Wajib terpisah**
+  dari `lib/dashboard.ts`: client component tidak boleh mengimpor modul yang
+  memakai `next/headers` (`createClient`) atau build gagal.
+- `components/responses-chart.tsx` — grafik SVG murni, **tanpa dependency baru**
+  (prompt 4). Batang = respons (`chart-1` koral), garis+titik = form dibuka
+  (`chart-2` teal). Tooltip hover/tap, `<title>`+`<desc>`, tabel `sr-only`,
+  empty state jelas saat `total === 0`.
+- `components/responses-chart-card.tsx` — client wrapper: `SegmentedControl`
+  6/12 bulan + skeleton saat memuat ulang (lewat `useTransition`).
+
+### Perubahan
+
+- `app/admin/(dashboard)/dashboard/page.tsx` — dipakai ulang utuh:
+  - Banner peringatan (`3.F`) muncul hanya jika ada form aktif dengan
+    `close_date` ≤ 7 hari; nama form dirender sebagai **JSX** (bukan string
+    HTML — React escape otomatis), maks 3 + "dan N lainnya".
+  - 4 `StatCard` (`3.D`): Formulir aktif, Respons masuk (+N bulan ini, netral
+    bila 0/turun), Segera ditutup (varian warning), Kategori dipakai.
+  - Grafik (`3.E`) + legenda.
+  - Tabel "Formulir terbaru" (`3.G`) memakai `ResponsiveTable` + aksi baris
+    `FormQuickActions` (server action existing: Tutup/Buka, Duplikasi, Hapus).
+    **Tidak ada tombol palsu** (batasan 3 prompt).
+  - `revalidate = 60` (ISR Fase 8-4) dipertahankan.
+
+### Verifikasi
+
+- `npx tsc --noEmit`: 0 error.
+- `npx eslint` (4 file): 0 error, 0 warning.
+- `npm run test:unit`: 69/69 lulus.
+- `npm run build`: sukses, 0 error, 15 route (semua `ƒ` dinamis; dashboard
+  tetap server-rendered on demand sesuai `revalidate`).
+
+### Catatan keamanan
+
+- Otorisasi tidak diubah: `getResponseChartData`/`getMonthlyResponseStats`/
+  `getTotalResponseCount` memanggil `requireAdmin()`; `getAllForms()` sudah
+  memanggilnya. `loadChartAction` mewarisi otorisasi `getResponseChartData`.
+- Tidak ada data responden (`answers`) yang diambil untuk grafik.
+- Banner hanya mendaftar form yang **aktif** — form tertutup disembunyikan
+  (tidak membocorkan form yang sudah berakhir).
+
+### Risiko/regresi
+
+- `getResponseChartData` mengambil SEMUA `submitted_at` dalam rentang lalu
+  membucket di JS — pada dataset respons sangat besar (>50rb/bln) query ini
+  bisa jadi berat. Opsi bila muncul: SQL `date_trunc` RPC atau `head`+range
+  per bulan. Dataset saat ini jauh lebih kecil.
+- `forms.open_date` difilter lewat `is_deleted = false`; form sampah
+  (soft-delete) tidak dihitung di grafik tapi tetap muncul di `getAllForms`
+  (dashboard memakai `isFormActive` untuk filternya sendiri).
+- Rollback: `git revert` commit U2; `dashboard/page.tsx` lama ada di `git log`.
