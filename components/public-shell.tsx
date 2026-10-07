@@ -24,7 +24,9 @@ export function PublicShell({ children, className }: PublicShellProps) {
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-center px-4">
           <Link
             href="/"
-            className="flex items-center gap-2.5 transition-transform hover:scale-105"
+            // U5 a11y: target sentuh minimal 44px (header h-14=56px, link di
+            // dalamnya tadinya hanya ~33px).
+            className="flex min-h-[44px] items-center gap-2.5 px-2 transition-transform hover:scale-105"
           >
             <PMKLogo size={32} className="border-2" />
             <span className="flex flex-col leading-tight">

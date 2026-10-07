@@ -27,7 +27,7 @@ import { TurnstileWidget } from "./TurnstileWidget";
 import { FormFieldRenderer } from "./FormFieldRenderer";
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, ArrowLeft, UploadCloud, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
@@ -267,9 +267,11 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
               />
             </div>
           </div>
-          <CardTitle className="font-serif text-3xl font-bold text-primary md:text-4xl">
+          {/* U5 a11y: judul form memakai <h1> (CardTitle me-render <div>,
+              bukan heading — setiap halaman harus punya tepat satu <h1>). */}
+          <h1 className="font-serif text-3xl font-bold text-primary md:text-4xl">
             {genericForm.title}
-          </CardTitle>
+          </h1>
           {genericForm.description && (
             <CardDescription className="mt-4 whitespace-pre-wrap text-base leading-relaxed text-foreground/80">
               {genericForm.description}

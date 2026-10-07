@@ -13,7 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getFormStatus, CLOSING_SOON_DAYS } from "@/lib/form-status";
 
-const NOW = new Date("2026-10-07T00:00:00+07:00").getTime();
+const NOW = new Date().setHours(0, 0, 0, 0); // tengah malam hari ini, zona server
 
 /** Form aktif standar: dibuka 1 hari lalu, ditutup 30 hari lagi. */
 const ACTIVE = {

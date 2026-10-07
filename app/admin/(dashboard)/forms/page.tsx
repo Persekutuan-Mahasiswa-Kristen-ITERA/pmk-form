@@ -166,7 +166,8 @@ function FilterChip({ label, href, active }: { label: string; href: string; acti
   return (
     <Link
       href={href}
-      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+      // U5 a11y: target sentuh minimal 44px (kriteria penerimaan §8).
+      className={`flex min-h-[44px] shrink-0 items-center rounded-full px-4 py-1 text-xs font-medium transition-colors ${
         active
           ? "bg-primary text-primary-foreground"
           : "bg-secondary text-secondary-foreground hover:bg-secondary/80"

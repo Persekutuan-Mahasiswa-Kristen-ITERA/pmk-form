@@ -130,10 +130,10 @@ function SortableFieldItem({
         <div className="flex items-center gap-1">
           {/* U4 aksesibilitas: tombol naik/turun sebagai alternatif drag
               (prompt: "plus tombol naik/turun sebagai alternatif aksesibel"). */}
-          <Button type="button" variant="ghost" size="icon" onClick={onMoveUp} disabled={!canMoveUp} title="Naikkan posisi" aria-label="Naikkan posisi field"><ArrowUp className="w-4 h-4 text-muted-foreground" /></Button>
-          <Button type="button" variant="ghost" size="icon" onClick={onMoveDown} disabled={!canMoveDown} title="Turunkan posisi" aria-label="Turunkan posisi field"><ArrowDown className="w-4 h-4 text-muted-foreground" /></Button>
-          <Button type="button" variant="ghost" size="icon" onClick={onDuplicate} title="Duplikat"><Copy className="w-4 h-4 text-muted-foreground" /></Button>
-          <Button type="button" variant="ghost" size="icon" onClick={onRemove} title="Hapus"><Trash2 className="w-4 h-4 text-destructive" /></Button>
+          <Button type="button" variant="ghost" size="icon" onClick={onMoveUp} disabled={!canMoveUp} aria-label="Naikkan posisi field" title="Naikkan posisi"><ArrowUp className="w-4 h-4 text-muted-foreground" /></Button>
+          <Button type="button" variant="ghost" size="icon" onClick={onMoveDown} disabled={!canMoveDown} aria-label="Turunkan posisi field" title="Turunkan posisi"><ArrowDown className="w-4 h-4 text-muted-foreground" /></Button>
+          <Button type="button" variant="ghost" size="icon" onClick={onDuplicate} aria-label="Duplikat field" title="Duplikat"><Copy className="h-4 w-4 text-muted-foreground" /></Button>
+          <Button type="button" variant="ghost" size="icon" onClick={onRemove} aria-label="Hapus field" title="Hapus"><Trash2 className="h-4 w-4 text-destructive" /></Button>
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -157,7 +157,7 @@ function SortableFieldItem({
             {(field.options || []).map((opt, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <Input value={opt.label} onChange={(e) => handleUpdateOption(idx, e.target.value)} placeholder={`Opsi ${idx + 1}`} className="h-9 text-sm" />
-                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-destructive" onClick={() => handleRemoveOption(idx)}><Trash2 className="w-4 h-4" /></Button>
+                <Button type="button" variant="ghost" size="icon" className="min-h-[44px] min-w-[44px] text-destructive" onClick={() => handleRemoveOption(idx)} aria-label={`Hapus opsi ${idx + 1}`} title="Hapus opsi"><Trash2 className="w-4 h-4" /></Button>
               </div>
             ))}
             <Button type="button" variant="outline" size="sm" onClick={handleAddOption} className="text-xs"><Plus className="w-3.5 h-3.5 mr-1" /> Tambah Opsi</Button>

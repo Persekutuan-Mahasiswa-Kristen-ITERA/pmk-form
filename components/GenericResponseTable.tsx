@@ -297,20 +297,22 @@ export function GenericResponseTable({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="min-h-[44px] min-w-[44px]"
                             onClick={() => setSelectedResponse(res)}
+                            aria-label="Lihat detail respons"
                             title="Detail"
                           >
-                            <Eye className="w-4 h-4 text-muted-foreground" />
+                            <Eye className="h-4 w-4 text-muted-foreground" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-destructive"
+                            className="min-h-[44px] min-w-[44px] text-destructive"
                             onClick={() => setPendingDeleteId(res.id)}
+                            aria-label="Hapus respons"
                             title="Hapus"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </TableCell>
                       </TableRow>

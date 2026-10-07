@@ -180,6 +180,7 @@ export function AdminUsersClient({
                       size="icon"
                       className="rounded-xl text-muted-foreground hover:text-destructive"
                       disabled={pending || isSelf}
+                      aria-label={isSelf ? "Tidak dapat menghapus akun sendiri" : `Hapus ${m.email} dari allowlist`}
                       title={isSelf ? "Tidak dapat menghapus akun sendiri" : "Hapus dari allowlist"}
                       onClick={() => handleDelete(m)}
                     >

@@ -48,17 +48,17 @@ test("formatDate: tanggal invalid mengembalikan string kosong (tidak throw)", ()
 });
 
 test("daysUntil: hari di masa depan positif", () => {
-  const inThreeDays = "2026-10-10T00:00:00+07:00";
+  const inThreeDays = new Date(Date.now() + 3 * 86400000).toISOString();
   assert.equal(daysUntil(inThreeDays), 3);
 });
 
 test("daysUntil: hari ini = 0 (hari kalender, bukan 24-jam pecahan)", () => {
-  const sameDay = "2026-10-07T01:00:00+07:00";
+  const sameDay = new Date().toISOString();
   assert.equal(daysUntil(sameDay), 0);
 });
 
 test("daysUntil: hari yang sudah lewat negatif", () => {
-  const yesterday = "2026-10-06T00:00:00+07:00";
+  const yesterday = new Date(Date.now() - 86400000).toISOString();
   assert.equal(daysUntil(yesterday), -1);
 });
 
