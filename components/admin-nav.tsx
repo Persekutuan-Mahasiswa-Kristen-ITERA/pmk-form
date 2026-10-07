@@ -4,17 +4,22 @@
  * AdminNav — navigasi admin desktop + drawer mobile (UI Overhaul U1).
  *
  * SATU client component untuk navigasi karena state aktif per-route butuh
- * `usePathname()` (hanya tersedia di client). Desktop: menu inline; mobile
- * (< lg): drawer `Sheet` sisi kiri yang berisi menu, identitas user, dan
- * tombol Keluar (keputusan U0-a).
+ * `usePathname()`. Desktop: menu inline; mobile (< lg): drawer `Sheet` sisi
+ * kiri yang berisi menu, identitas user, dan tombol Keluar (keputusan U0-a).
  *
- * Item menu min-height 44px di mobile (target sentuh). Otorisasi TIDAK ada
- * di sini — tetap di layout (`getAdminUser`) + server action.
+ * `NAV_ITEMS` (berisi komponen ikon) DIDEFINISIKAN DI SINI, bukan di
+ * `AdminShell`. Sebab: `AdminShell` adalah Server Component, dan React
+ * melarang melewatkan function/komponen (termasuk ikon lucide) sebagai prop
+ * dari Server ke Client Component ("Functions cannot be passed directly to
+ * Client Components"). Filter `superAdminOnly` dilakukan di client — aman
+ * karena otorisasi sebenarnya tetap ada di setiap route handler.
+ *
+ * Item menu min-height 44px di mobile (target sentuh).
  */
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu } from "lucide-react";
+import { Menu, Home, FileStack, Users, ScrollText } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -36,22 +41,38 @@ export type NavItem = {
   superAdminOnly?: boolean;
 };
 
+export const ADMIN_NAV_ITEMS: readonly NavItem[] = [
+  { href: "/admin/dashboard", label: "Dashboard", icon: Home },
+  { href: "/admin/forms", label: "Formulir", icon: FileStack },
+  { href: "/admin/users", label: "Admin", icon: Users, superAdminOnly: true },
+  {
+    href: "/admin/audit",
+    label: "Audit Log",
+    icon: ScrollText,
+    superAdminOnly: true,
+  },
+];
+
 /** Kelas state aktif: teks accent + latar halus + border krem. */
 const ACTIVE_CLASS =
   "aria-[current=page]:border-accent/40 aria-[current=page]:bg-accent/10 aria-[current=page]:font-semibold aria-[current=page]:text-primary";
 
 export function AdminNav({
-  items,
   admin,
+  items = ADMIN_NAV_ITEMS,
 }: {
-  items: readonly NavItem[];
   admin: AdminUser | null;
+  items?: readonly NavItem[];
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
+
+  const visible = items.filter(
+    (item) => !item.superAdminOnly || admin?.role === "super_admin",
+  );
 
   return (
     <>
@@ -60,7 +81,7 @@ export function AdminNav({
         className="hidden items-center gap-1 lg:flex"
         aria-label="Navigasi admin"
       >
-        {items.map((item) => (
+        {visible.map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -128,7 +149,7 @@ export function AdminNav({
               className="flex flex-col gap-1 px-3"
               aria-label="Navigasi admin mobile"
             >
-              {items.map((item) => (
+              {visible.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}

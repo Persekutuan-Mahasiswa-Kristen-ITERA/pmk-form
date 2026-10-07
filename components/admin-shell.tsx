@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { Home, FileStack, Users, ScrollText } from "lucide-react";
 import { PMKLogo } from "@/components/PMKLogo";
 import { getAdminUser } from "@/lib/auth";
-import { AdminNav, type NavItem } from "@/components/admin-nav";
+import { AdminNav } from "@/components/admin-nav";
 
 /**
  * AdminShell — navbar admin responsif (UI Overhaul U1).
@@ -14,32 +13,21 @@ import { AdminNav, type NavItem } from "@/components/admin-nav";
  * identitas user, dan Keluar masuk ke drawer `Sheet` sisi kiri (keputusan
  * U0-a). Item menu min-height 44px (target sentuh).
  *
+ * Server Component — hanya menjalankan `getAdminUser()` untuk meneruskan
+ * identitas ke `AdminNav` (client). Daftar menu (`ADMIN_NAV_ITEMS`, berisi
+ * komponen ikon) DIDEFINISIKAN DI `AdminNav` karena React melarang function
+ * dilewatkan dari Server ke Client Component.
+ *
  * Otorisasi TIDAK ADA di sini — tetap di layout (`getAdminUser`) + server
  * action; shell ini hanya presentasi.
  */
-export const navItems: readonly NavItem[] = [
-  { href: "/admin/dashboard", label: "Dashboard", icon: Home },
-  { href: "/admin/forms", label: "Formulir", icon: FileStack },
-  { href: "/admin/users", label: "Admin", icon: Users, superAdminOnly: true },
-  {
-    href: "/admin/audit",
-    label: "Audit Log",
-    icon: ScrollText,
-    superAdminOnly: true,
-  },
-];
-
 export async function AdminShell({ children }: { children: React.ReactNode }) {
   const admin = await getAdminUser();
 
-  const items = navItems.filter(
-    (item) => !item.superAdminOnly || admin?.role === "super_admin",
-  );
-
   return (
     <div className="flex min-h-dvh flex-col bg-background font-sans">
-      <header className="sticky top-0 z-50 w-full border-b border-border bg-white/95 shadow-sm backdrop-blur-md pt-safe">
-        <div className="mx-auto flex h-14 items-center justify-between gap-2 px-4 md:px-6 lg:px-8 max-w-7xl">
+      <header className="sticky top-0 z-50 w-full border-b border-border bg-white/95 pt-safe shadow-sm backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-2 px-4 md:px-6 lg:px-8">
           <Link
             href="/admin/dashboard"
             className="flex shrink-0 items-center gap-3 transition-transform hover:scale-105"
@@ -54,11 +42,11 @@ export async function AdminShell({ children }: { children: React.ReactNode }) {
               </span>
             </span>
           </Link>
-          <AdminNav items={items} admin={admin} />
+          <AdminNav admin={admin} />
         </div>
       </header>
 
-      <main className="container mx-auto w-full max-w-7xl flex-1 p-4 md:p-8">
+      <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-8">
         {children}
       </main>
     </div>
