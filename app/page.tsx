@@ -4,7 +4,6 @@ import { GoldenParticles } from "@/components/LazyGoldenParticles";
 import { BibleVerseBanner } from "@/components/LazyBibleVerseBanner";
 import { ClipboardList, Users, BarChart3, TrendingUp } from "lucide-react";
 import Link from "next/link";
-import { PMKLogo } from "@/components/PMKLogo";
 import { PublicShell } from "@/components/public-shell";
 import {
   FORM_CATEGORIES,
@@ -46,23 +45,24 @@ export default async function LandingPage({
         <GoldenParticles />
         <BibleVerseBanner />
 
-        {/* Hero Section — ringkas (prompt U3) */}
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center px-4 pt-10 sm:px-6 sm:pt-16 lg:px-8">
-          <PMKLogo size={112} className="mb-5 border-2 sm:mb-6 sm:border-4" />
-
-          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary sm:mb-4 sm:gap-2 sm:px-4 sm:py-1.5 sm:text-xs">
+        {/* Hero Section — ringkas (prompt U3): batas atas viewport harus
+            langsung menampilkan filter + kartu formulir, bukan hanya hero.
+            Logo besar di hero sengaja dihapus: PublicShell sudah menampilkan
+            logo + nama di header, jadi tidak ada logo ganda. */}
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center px-4 pt-8 sm:px-6 sm:pt-12 lg:px-8">
+          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary sm:mb-3 sm:gap-2 sm:px-4 sm:text-xs">
             <ClipboardList className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Portal Form &amp; Pelayanan
           </div>
 
-          <h1 className="mb-3 px-2 text-center font-serif text-2xl font-bold leading-tight tracking-tight text-foreground sm:mb-4 sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl">
+          <h1 className="mb-2 px-2 text-center font-serif text-2xl font-bold leading-tight tracking-tight text-foreground sm:mb-3 sm:text-3xl md:text-4xl lg:text-5xl">
             Portal Formulir PMK ITERA
           </h1>
-          <p className="mb-6 max-w-xl rounded-full bg-background/40 px-4 py-1.5 text-center text-sm font-medium leading-relaxed text-foreground/70 backdrop-blur-sm sm:mb-8 sm:max-w-2xl sm:px-6 sm:py-2 sm:text-base md:text-lg">
+          <p className="mb-5 max-w-xl rounded-full bg-background/40 px-4 py-1.5 text-center text-sm font-medium leading-relaxed text-foreground/70 backdrop-blur-sm sm:mb-6 sm:max-w-2xl sm:px-6 sm:py-2 sm:text-base md:text-lg">
             Satu wadah untuk pendaftaran pelayanan, kegiatan, kepanitiaan, presensi, dan survei PMK ITERA
           </p>
 
           {/* Quick Stats Bar */}
-          <div className="mb-6 grid w-full max-w-3xl grid-cols-3 gap-3 px-2 sm:mb-8 sm:gap-4 sm:px-0">
+          <div className="mb-5 grid w-full max-w-3xl grid-cols-3 gap-3 px-2 sm:mb-6 sm:gap-4 sm:px-0">
             <StatCard icon={<Users className="h-5 w-5" />} value={totalForms || 0} label="Total Form" color="primary" />
             <StatCard icon={<BarChart3 className="h-5 w-5" />} value={totalCategories} label="Kategori" color="accent" />
             <StatCard icon={<TrendingUp className="h-5 w-5" />} value={upcomingDeadlines} label="Segera Tutup" color="destructive" />
