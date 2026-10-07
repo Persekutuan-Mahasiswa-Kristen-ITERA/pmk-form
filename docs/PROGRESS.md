@@ -642,9 +642,35 @@ berubah (batasan 1).
 - `next build`: **BELUM bisa dijalankan** — butuh env Supabase
   (`NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY`/`SERVICE_ROLE_KEY`) yang tidak ada di
   environment ini.
-- Verifikasi visual: **BELUM dilakukan** — `vision_analyze` ditolak model
-  (Atria-Dawn-Preview tidak mendukung vision). Rencana: screenshot per viewport
-  (360/390/768/1024/1440) via `browser_exec` setelah dev server bisa start.
+- **Verifikasi visual DILAKUKAN** (browser headless via `browser_exec`, viewport
+  360/390/768/1024/1440 — `vision_analyze` ditolak model, jadi pakai DOM +
+  computed-style assertions + screenshot):
+  - **404 global** (`/halaman-tidak-ada`): judul, teks, tombol "Kembali ke
+    beranda" + "Lihat formulir" tampil benar; **0 horizontal overflow** di semua
+    viewport; judul `Halaman tidak ditemukan — PMK ITERA`.
+  - **404 form** (`/form/slug-tidak-ada`): h1 "Formulir tidak ditemukan atau
+    sudah ditutup" tampil (pesan aman, tidak membedakan slug salah vs form
+    ditutup).
+  - **Landing** `/`: h1 "Portal Formulir PMK ITERA", 0 overflow semua viewport.
+  - **`/admin/dashboard` tanpa login**: redirect ke `/admin/login` (proxy.ts
+    utuh, tidak diubah).
+  - **403 "Akses Ditolak"**: tampil benar (layout group + `getAdminUser`,
+    logika tidak diubah).
+  - **Drawer mobile 360px**: terbuka dengan benar, judul "Menu Admin", 4 menu
+    (Dashboard/Formulir/Admin/Audit Log — Admin & Audit Log muncul karena role
+    demo super_admin), **tinggi item tepat 44px**, tombol Tutup + Keluar di
+    dalam drawer, **0 overflow** saat drawer terbuka.
+  - **SegmentedControl**: klik "6 bulan"/"12 bulan" memperbarui
+    `aria-checked` dengan benar (role=radiogroup).
+  - **ConfirmDialog**: tombol "Hapus (demo konfirmasi)" membuka dialog
+    (judul "Hapus formulir?", deskripsi, Batal + Hapus permanen); Batal
+    menutup; Hapus permanen menutup + menjalankan handler; **0 overflow**.
+  - **ResponsiveTable**: di 360px wrapper tabel `display:none` + kartu mobile
+    `display:flex` (5 kartu); di 768px & 1024px kebalikannya (tabel tampil,
+    kartu disembunyikan) — breakpoint `md` bekerja.
+  - **StatusBadge/CategoryBadge**: semua 5 status + 5 kategori punya TEKS
+    (status tidak hanya berbasis warna, sesuai aturan 3.G).
+  - `next build` setelah U1: **sukses, 0 error, 15 route**.
 
 ### Catatan keamanan
 
