@@ -835,7 +835,7 @@ gagal — `minimax-m3` EOL; desktop & form-mobile berhasil dianalisis)
 
 - Landing desktop 1280×900: 1 logo, filter + kartu terlihat di fold, footer
   ada, tidak ada overflow/tumpang tindih. Lolos.
-- Form page mobile 390×844: header tipis, field satu koloh full-width,
+- Form page mobile 390×844: header tipis, field satu kolom full-width,
   sticky bar "Kirim Respons", target sentuh ±44–50px, tidak ada overflow. Lolos.
 - Overflow horizontal dicek terprogram via CDP:
   `document.documentElement.scrollWidth > window.innerWidth` = **false** di
