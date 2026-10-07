@@ -764,3 +764,96 @@ Sesuai bagian 3 prompt: dashboard dirombak memakai sistem desain U1
   (soft-delete) tidak dihitung di grafik tapi tetap muncul di `getAllForms`
   (dashboard memakai `isFormActive` untuk filternya sendiri).
 - Rollback: `git revert` commit U2; `dashboard/page.tsx` lama ada di `git log`.
+
+---
+
+## UI OVERHAUL — U3: Halaman publik mobile-first (branch `feat/ui-public`)
+
+**Status:** selesai. Verifikasi: tsc ✓, eslint 0 error/warning, 69 unit test ✓,
+build ✓ (15 route). Verifikasi visual: landing desktop lolos (Chromium headless
++ analisis gambar), form page mobile lolos, cek overflow horizontal via CDP di
+390/768/1280px: **nol di semua viewport**.
+
+### File yang dirombak
+
+**`components/GenericFormRenderer.tsx`** (inti `/form/[slug]` — "halaman
+terpenting untuk mobile")
+- **Bar aksi bawah sticky** dengan tombol "Kirim Respons" + padding
+  `env(safe-area-inset-bottom)` — tidak tertutup keyboard; `pb-44`/`pb-32`
+  memberi ruang agar konten terakhir tidak tertutup bar.
+- **Indikator progres** (`<Progress>`) saat `settings.show_progress` — menghitung
+  hanya bidang wajib agar persentase stabil, `aria-live` untuk pembaca layar.
+- **Scroll ke error pertama** + `focus()` saat submit gagal validasi
+  (`form.handleSubmit(onSubmit, onInvalid)`).
+- **Upload file**: validasi ukuran client-side (10 MB), status eksplisit
+  (`Mengunggah…` / `berhasil diunggah` / `gagal diunggah…`), petunjuk
+  tipe/ukuran di bawah field.
+- **Toast** (bukan `alert()`) untuk error submit/rate limit; tombol submit
+  `disabled` saat proses (cegah double submit).
+- `redirect_url` tetap dihormati dari `settings` (router.push).
+- Logika bisnis TIDAK diubah: skema Zod dinamis, `uploadFormAttachment`,
+  `submitFormResponseAction`, Turnstile (`require_captcha !== false`).
+
+**`app/form/[slug]/success/page.tsx`** — dijadikan server component
+- Settings (`thank_you_message`, `wa_group_link`) diambil di **server** via
+  `getFormBySlug` (RLS berlaku) — sebelumnya query anon client ke tabel `forms`.
+- **QR code dihapus** (prompt hanya minta "tombol menonjol"; menghapus
+  dependency client berat `react-qr-code` + layout mobile yang sempit).
+- **Gerbang "Selesai" dihapus**: dulu tombol kembali disabled sampai user
+  centang "sudah gabung grup" — pendaftar bisa terjebak. Sekarang tombol
+  "Kembali ke Beranda" selalu aktif.
+- Konfirmasi jelas: ikon `CheckCircle2` besar + judul serif + `whitespace-pre-wrap`
+  untuk thank_you_message.
+- `robots: noindex`.
+
+**`app/page.tsx`** (landing)
+- Dibungkus `PublicShell` (header + footer tunggal); footer lokal yang ganda
+  dihapus.
+- **Hero diringkas** (prompt: "hero ringkas"): logo besar di hero **dihapus**
+  karena `PublicShell` sudah menampilkan logo di header — sebelumnya dua logo
+  berdekatan dan hero mengisi ±90% tinggi viewport, mendorong kartu formulir
+  ke bawah fold. Verifikasi visual konfirmasi: setelah perbaikan, filter chip
+  + kartu formulir terlihat tanpa scroll.
+- Filter chip: scroll horizontal di mobile (`justify-start` + `overflow-x-auto`),
+  terpusat di desktop; `scrollbar-hide` yang tak terdefinisi di config
+  DIPERTAHANKAN untuk sementara (kelas utilitas lama, bukan error).
+- Empty state ditingkatkan: teks ramah + penjelasan + tautan
+  "Lihat semua kategori" saat ada filter kategori aktif.
+- Grid: 1 kolom mobile / 2 tablet / 3 desktop (sudah benar sebelumnya).
+
+**`app/form/[slug]/page.tsx`** — dibungkus `PublicShell`; kartu "Form Ditutup"
+  tetap netral (batasan 6: tidak membedakan "slug tidak ada" vs "form ditutup").
+
+### `/hasil` (Cek Hasil)
+
+**Tidak ada** — grep di seluruh `app/` dan `components/` tidak menemukan route
+maupun tautan `/hasil`. Halaman ini tidak dibuat (prompt menyebutnya "bila
+berlaku"). Bila nanti dibutuhkan, pola U3 sudah siap dipakai.
+
+### Verifikasi visual (Catatan: model vision untuk mobile/tablet sempat
+gagal — `minimax-m3` EOL; desktop & form-mobile berhasil dianalisis)
+
+- Landing desktop 1280×900: 1 logo, filter + kartu terlihat di fold, footer
+  ada, tidak ada overflow/tumpang tindih. Lolos.
+- Form page mobile 390×844: header tipis, field satu koloh full-width,
+  sticky bar "Kirim Respons", target sentuh ±44–50px, tidak ada overflow. Lolos.
+- Overflow horizontal dicek terprogram via CDP:
+  `document.documentElement.scrollWidth > window.innerWidth` = **false** di
+  390px, 768px, 1280px.
+
+### Catatan keamanan
+
+- Success page: query anon client ke `forms` dihapus — data settings sekarang
+  dilindungi RLS server-side.
+- Form Ditutup & 404 tetap tidak membocorkan apakah slug ada atau form ditutup.
+- Tidak ada server action/RLS/schema yang diubah; submit flow utuh.
+
+### Risiko/regresi
+
+- `GenericFormRenderer` sekarang mengandalkan `<Progress>` + `useToast`
+  (kompone UI U1 yang sudah ada). Bila `settings.show_progress` true pada form
+  dengan **0 bidang wajib**, indikator disembunyikan (guard
+  `requiredFieldIds.length > 0`).
+- Sticky bar memakai `form="main-form"` — tombol submit di luar `<form>`;
+  FITUR INI butuh browser modern (semua browser target 2026 mendukungnya).
+- Rollback: `git revert` commit U3 (2 commit).
