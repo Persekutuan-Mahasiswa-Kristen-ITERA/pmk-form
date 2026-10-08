@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Trash2, Copy } from "lucide-react";
+import Link from "next/link";
+import { Pencil, Trash2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   toggleFormOpenAction,
@@ -99,6 +100,19 @@ export function FormQuickActions({
         title={isOpen ? "Tutup form" : "Buka form"}
       >
         {isOpen ? "Tutup" : "Buka"}
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className="min-h-[44px] min-w-[44px] text-muted-foreground hover:text-primary"
+        asChild
+        aria-label="Edit form"
+        title="Edit form"
+      >
+        <Link href={`/admin/forms/${formId}`}>
+          <Pencil className="h-4 w-4" />
+        </Link>
       </Button>
 
       <Button

@@ -71,7 +71,7 @@ export function ResponsesChartCard({
         />
       )}
 
-      {/* Legenda (prompt 3.E) — boleh membungkus di layar kecil */}
+      {/* Legenda (satu tipe saja: batang respons) */}
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <span
@@ -79,13 +79,6 @@ export function ResponsesChartCard({
             className="h-2.5 w-2.5 rounded-full bg-[hsl(var(--chart-1))]"
           />
           Respons per bulan
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className="h-2.5 w-2.5 rounded-full bg-[hsl(var(--chart-2))]"
-          />
-          Formulir dibuka
         </span>
       </div>
     </div>

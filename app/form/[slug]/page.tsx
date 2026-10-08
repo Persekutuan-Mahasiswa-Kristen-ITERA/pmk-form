@@ -58,7 +58,7 @@ export default async function GenericPublicFormPage({
   }
 
   return (
-    <PublicShell>
+    <PublicShell headerClassName="md:hidden">
       <div className="relative w-full overflow-hidden">
         <GoldenParticles />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-40 bg-gradient-to-b from-primary/10 to-transparent" />
