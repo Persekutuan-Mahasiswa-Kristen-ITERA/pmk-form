@@ -76,15 +76,6 @@ export function ResponsesChart({
   // Skala: nilai -> koordinat Y (dipetakan ke plotH).
   const y = (v: number) => padTop + plotH - (v / maxValue) * plotH;
 
-  // Titik garis "form dibuka".
-  const linePoints = openedValues.map((v, i) => {
-    const x = padX + slotW * i + slotW / 2;
-    return [x, y(v)] as const;
-  });
-  const linePath = linePoints
-    .map(([x, ly], i) => `${i === 0 ? "M" : "L"}${x},${ly}`)
-    .join(" ");
-
   return (
     <div className="w-full">
       <svg
@@ -179,33 +170,9 @@ export function ResponsesChart({
           );
         })}
 
-        {/* Garis form dibuka */}
-        {openedValues.some((v) => v > 0) ? (
-          <>
-            <path
-              d={linePath}
-              fill="none"
-              stroke="hsl(var(--chart-2))"
-              strokeWidth={0.7}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-            {linePoints.map(([x, ly], i) => (
-              <circle
-                key={i}
-                cx={x}
-                cy={ly}
-                r={1.1}
-                className={cn(
-                  "transition-opacity",
-                  hovered === null || hovered === i
-                    ? "fill-[hsl(var(--chart-2))]"
-                    : "fill-[hsl(var(--chart-2))] opacity-40",
-                )}
-              />
-            ))}
-          </>
-        ) : null}
+        {/* Garis form dibuka — DIHAPUS (U6): grafik fokus satu tipe (batang)
+            sesuai permintaan; data form dibuka tetap ada di tabel a11y di
+            bawah dan deskripsi SVG. */}
 
         {/* Tooltip hover/tap */}
         {hovered !== null ? (
