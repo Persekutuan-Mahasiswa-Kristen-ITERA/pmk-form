@@ -22,31 +22,43 @@ import { Button } from "@/components/ui/button";
 export const revalidate = 60; // Fase 8-4: ISR 60s (dulunya 0 = no cache)
 
 export default async function DashboardPage() {
-  // F2-1: data-access layer tunggal — getAllForms() sudah requireAdmin().
-  const { data: forms } = await getAllForms();
+  // U6: semua query independen dijalankan PARALEL (satu round-trip wall-clock
+  // alih-alih 4 berurutan). `countResponsesForForms` tetap setelah `forms`
+  // karena bergantung pada daftar id.
+  const [
+    { data: forms },
+    chartData,
+    totalResponses,
+    monthlyStats,
+  ] = await Promise.all([
+    // F2-1: data-access layer tunggal — getAllForms() sudah requireAdmin().
+    getAllForms(),
+    // Data grafik (U2): agregasi di server, zona WIB. Default 6 bulan.
+    getResponseChartData(6).catch((err) => {
+      // Gagal memuat grafik tidak boleh membuat dashboard crash — render kartu
+      // dengan data kosong (grafik akan menampilkan empty state-nya).
+      console.error(
+        "Dashboard chart data error:",
+        err instanceof Error ? err.message : "unknown",
+      );
+      return {
+        buckets: [],
+        responseCounts: {},
+        formOpenedCounts: {},
+        total: 0,
+      };
+    }),
+    // Kartu "RESPONS MASUK": total + tren bulan berjalan (zona WIB).
+    getTotalResponseCount().catch(() => 0),
+    getMonthlyResponseStats().catch(() => ({
+      count: 0,
+      trend: "flat" as const,
+    })),
+  ]);
 
   // F2-4 + F2-5: statistik memakai computeFormStats (sumber: isFormActive),
   // bukan new Date() yang tersebar di body komponen.
   const stats = computeFormStats(forms);
-
-  // Data grafik (U2): agregasi di server, zona WIB. Default 6 bulan.
-  const chartData = await getResponseChartData(6).catch((err) => {
-    // Gagal memuat grafik tidak boleh membuat dashboard crash — render kartu
-    // dengan data kosong (grafik akan menampilkan empty state-nya).
-    console.error("Dashboard chart data error:", err instanceof Error ? err.message : "unknown");
-    return {
-      buckets: [],
-      responseCounts: {},
-      formOpenedCounts: {},
-      total: 0,
-    };
-  });
-
-  // Kartu "RESPONS MASUK": total + tren bulan berjalan (zona WIB).
-  const [totalResponses, monthlyStats] = await Promise.all([
-    getTotalResponseCount().catch(() => 0),
-    getMonthlyResponseStats().catch(() => ({ count: 0, trend: "flat" as const })),
-  ]);
 
   // Kartu "KATEGORI DIPAKAI": kategori distinct yang dipakai (semua form,
   // keputusan U0-c), diurutkan mengikuti urutan FORM_CATEGORIES.
