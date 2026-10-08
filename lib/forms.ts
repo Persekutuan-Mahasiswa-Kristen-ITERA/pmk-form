@@ -516,19 +516,23 @@ export async function countFormResponses(formId: string): Promise<number> {
 }
 
 /**
- * Count responses for MULTIPLE forms in a single query (batch).
- * Replaces N+1: previously each form called countFormResponses individually.
+ * Count responses for MULTIPLE forms — single grouped query.
+ *
+ * Sebelumnya: `.select("form_id", { head: true, count: "exact" })` — BUG:
+ * `head: true` mengembalikan BUKAN row (data selalu null), sehingga semua
+ * form menampilkan "0 Respons" walau sebenarnya ada.
+ *
+ * Sekarang: ambil kolom `form_id` saja (tanpa head), group di JS.
+ * Ini ringan — Supabase hanya mengirim 1 kolom string per row.
  */
 export async function countResponsesForForms(formIds: string[]): Promise<Record<string, number>> {
   await requireAdmin();
   if (formIds.length === 0) return {};
   const supabase = await createClient();
-  
-  // Single query: fetch all response rows for these forms, count in JS.
-  // This replaces N individual count queries with 1 select query.
+
   const { data, error } = await supabase
     .from("form_responses")
-    .select("form_id", { head: true, count: "exact" })
+    .select("form_id")
     .in("form_id", formIds);
 
   if (error) {
@@ -536,7 +540,6 @@ export async function countResponsesForForms(formIds: string[]): Promise<Record<
     return Object.fromEntries(formIds.map((id) => [id, 0]));
   }
 
-  // Build count map from the data
   const counts: Record<string, number> = Object.fromEntries(formIds.map((id) => [id, 0]));
   if (data) {
     for (const row of data) {
