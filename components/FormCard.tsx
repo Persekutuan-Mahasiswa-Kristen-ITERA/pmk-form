@@ -58,7 +58,7 @@ export function FormCard({ slug, title, description, closeDate, formType }: Form
                 </div>
             </CardContent>
             <CardFooter>
-                <Button asChild className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold rounded-xl group-hover:scale-[1.02] transition-transform">
+                <Button asChild className="min-h-[44px] w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold rounded-xl group-hover:scale-[1.02] transition-transform">
                     <Link href={href}>
                         {isRecruitment ? "Daftar Sekarang" : "Isi Form"} <ChevronRight className="w-4 h-4 ml-1" />
                     </Link>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { PMK_LOGO_URL } from "@/components/PMKLogo";
 import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -56,7 +56,7 @@ export default function AdminLogin() {
     };
 
     return (
-        <main className="min-h-screen flex items-center justify-center bg-[#FAF6F0] p-4 relative overflow-hidden">
+        <main className="flex min-h-dvh items-center justify-center bg-[#FAF6F0] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))] relative overflow-hidden">
             <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
                 <svg width="800" height="800" viewBox="0 0 24 24" fill="none" stroke="#A0522D" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 2v20M5 8h14" />
@@ -68,7 +68,7 @@ export default function AdminLogin() {
                     <div className="bg-primary/5 p-4 rounded-full mb-4">
                         <Image src={PMK_LOGO_URL} alt="PMK Logo" width={80} height={80} priority />
                     </div>
-                    <CardTitle className="font-serif text-2xl text-foreground font-bold">Admin Portal</CardTitle>
+                    <h1 className="font-serif text-2xl font-bold text-foreground">Admin Portal</h1>
                     <CardDescription className="text-center font-medium mt-2">
                         Silakan masuk untuk mengelola Open Recruitment
                     </CardDescription>

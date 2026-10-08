@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect } from "react";
 import { Sheet, Loader2, RefreshCw, UploadCloud, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,11 @@ export function SheetsSettingsPanel({
     lastSyncedAt: string | null;
   } | null>(null);
   const [pending, startTransition] = useTransition();
+  // U4: konfirmasi backfill memakai ConfirmDialog (bukan window.confirm(),
+  // batasan 6 — aksi yang menyentuh seluruh data respons). Variabel `pending`
+  // sudah dipakai useTransition, jadi pakai nama state sendiri di sini.
+  const [backfillOpen, setBackfillOpen] = useState(false);
+  const [backfillRunning, setBackfillRunning] = useState(false);
   const { toast } = useToast();
 
   // Ambil status sinkronisasi saat mount (hanya bila sudah aktif).
@@ -106,13 +112,11 @@ export function SheetsSettingsPanel({
     });
 
   const handleBackfill = () => {
-    if (
-      !confirm(
-        "Sinkronkan SEMUA respons form ini ke spreadsheet? Data lama (~240 baris) akan dikirim dalam batch. Proses ini idempoten — aman dijalankan ulang."
-      )
-    ) {
-      return;
-    }
+    setBackfillOpen(true);
+  };
+
+  const runBackfill = () => {
+    setBackfillRunning(true);
     startTransition(async () => {
       const res = await backfillSyncAction(formId);
       toast({
@@ -126,6 +130,7 @@ export function SheetsSettingsPanel({
         const st = await getSheetsStatusAction(formId);
         if (st.success) setStatus(st.status);
       }
+      setBackfillOpen(false);
     });
   };
 
@@ -242,6 +247,17 @@ export function SheetsSettingsPanel({
           </div>
         )}
       </CardContent>
+
+      {/* U4: konfirmasi backfill — dialog bermerek, bukan window.confirm(). */}
+      <ConfirmDialog
+        open={backfillOpen}
+        onOpenChange={setBackfillOpen}
+        title="Sinkronkan semua respons?"
+        description="Semua respons form ini akan dikirim ke spreadsheet dalam batch. Proses ini idempoten — baris yang sudah ada tidak ditulis ulang, aman dijalankan ulang."
+        confirmLabel="Sinkronkan"
+        pending={backfillRunning}
+        onConfirm={runBackfill}
+      />
     </Card>
   );
 }

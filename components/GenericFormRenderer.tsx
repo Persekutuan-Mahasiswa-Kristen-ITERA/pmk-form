@@ -1,6 +1,22 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * GenericFormRenderer — inti halaman publik `/form/[slug]` (UI Overhaul U3).
+ *
+ * Logika bisnis TIDAK diubah: skema Zod dinamis, upload lewat
+ * `uploadFormAttachment`, submit lewat `submitFormResponseAction`,
+ * Turnstile hanya jika `settings.require_captcha !== false` (Fase 7-2).
+ *
+ * Yang dirombak (prompt U3 & bagian 5):
+ * - layout satu kolom mobile-first, tombol kirim jadi **bar aksi bawah sticky**
+ *   yang aman safe-area + tidak tertutup keyboard,
+ * - indikator progres saat `settings.show_progress` (bidang wajib diisi),
+ * - error inline + **scroll otomatis ke error pertama**,
+ * - upload file: status unggah + error jelas, petunjuk tipe/ukuran,
+ * - toast (bukan `alert`) untuk error submit / rate limit,
+ * - tombol kirim menonaktifkan diri saat proses (cegah double submit).
+ */
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,12 +27,17 @@ import { TurnstileWidget } from "./TurnstileWidget";
 import { FormFieldRenderer } from "./FormFieldRenderer";
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, ArrowLeft, UploadCloud, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { PMK_LOGO_URL } from "@/components/PMKLogo";
+import { useToast } from "@/hooks/use-toast";
 import type { Form as GenericForm, FieldConfig, FieldOption } from "@/types/forms";
+
+const MAX_FILE_MB = 10;
+const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
 // Normalize generic FieldConfig -> renderer FieldConfig
 function toRendererConfig(f: FieldConfig): import("./FormFieldRenderer").FieldConfig {
@@ -27,7 +48,7 @@ function toRendererConfig(f: FieldConfig): import("./FormFieldRenderer").FieldCo
   // diteruskan apa adanya agar <input type> benar.
   //
   // Normalisasi string-option DIPERTAHANKAN: data produksi (7 form, 12 field)
-  // menyimpan options sebagai string[], sedangkan renderer butu {label,value}.
+  // menyimpan options sebagai string[], sedangkan renderer butuh {label,value}.
   const options = f.options
     ? f.options.map((o: string | FieldOption) =>
         typeof o === "string"
@@ -48,10 +69,16 @@ function toRendererConfig(f: FieldConfig): import("./FormFieldRenderer").FieldCo
   };
 }
 
+/** Status unggah file per field (prompt U3: "status unggah dan error jelas"). */
+type UploadState = "idle" | "uploading" | "done" | "error";
+
 export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [uploadStates, setUploadStates] = useState<Record<string, UploadState>>({});
+  const submitBarRef = useRef<HTMLDivElement>(null);
 
   // Fase 7-2: Turnstile aktif hanya jika dikonfigurasi global (env) DAN
   // diaktifkan per-form (settings.require_captcha !== false).
@@ -62,14 +89,17 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
   const fields: FieldConfig[] = genericForm.form_fields || [];
   const rendererFields = fields.map(toRendererConfig);
 
+  // F4-1 progress: hanya bidang wajib yang dihitung agar indikator stabil.
+  const requiredFieldIds = fields.filter((f) => f.required).map((f) => f.id);
+
   // Build dynamic Zod schema. Keep concrete schemas until refinements are applied;
   // assigning everything to ZodTypeAny too early removes methods such as min().
   const schemaShape: Record<string, z.ZodTypeAny> = {};
   fields.forEach((field) => {
     if (field.type === "file_upload") {
       let validator = z.custom<File>();
-      validator = validator.refine((file) => !file || file.size <= 10 * 1024 * 1024, {
-        message: "Ukuran file maksimal 10 MB",
+      validator = validator.refine((file) => !file || file.size <= MAX_FILE_BYTES, {
+        message: `Ukuran file maksimal ${MAX_FILE_MB} MB`,
       });
       schemaShape[field.id] = field.required
         ? validator.refine((file) => !!file, { message: `${field.label} wajib diupload.` })
@@ -100,12 +130,51 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
 
   const formSchema = z.object(schemaShape);
 
+  // U3: defaultValues string kosong (bukan {}) supaya Zod memunculkan pesan
+  // spesifik ("X wajib diisi.") alih-alih "Invalid input" generik saat field
+  // required dibiarkan kosong. File upload & checkbox-group tetap undefined.
+  const defaultValues: Record<string, unknown> = {};
+  fields.forEach((field) => {
+    if (field.type === "file_upload") return;
+    if (field.type === "checkbox" && field.options && field.options.length > 0) return;
+    if (field.type === "checkbox") return;
+    defaultValues[field.id] = "";
+  });
+
   const form = useForm({
     resolver: zodResolver(formSchema),
     mode: "onSubmit",
     reValidateMode: "onSubmit",
-    defaultValues: {} as Record<string, unknown>,
+    defaultValues,
   });
+
+  const showProgress = genericForm.settings?.show_progress === true;
+
+  // Indikator progres = persentase bidang wajib yang sudah terisi.
+  const filledCount = requiredFieldIds.filter((id) => {
+    const v = form.watch(id);
+    if (Array.isArray(v)) return v.length > 0;
+    return v !== undefined && v !== null && v !== "";
+  }).length;
+  const progress = requiredFieldIds.length
+    ? Math.round((filledCount / requiredFieldIds.length) * 100)
+    : 100;
+
+  // U3: scroll ke error pertama setelah validasi gagal.
+  const onInvalid = () => {
+    // requestAnimationFrame agar DOM sudah render pesan error sebelum scroll.
+    requestAnimationFrame(() => {
+      // shadcn FormItem menandai field bermasalah lewat aria-invalid pada
+      // elemen input; label/FormItem sendiri tidak punya penanda lain.
+      const firstError = document.querySelector(
+        '[aria-invalid="true"]',
+      );
+      if (firstError instanceof HTMLElement) {
+        firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+        firstError.focus({ preventScroll: true });
+      }
+    });
+  };
 
   const onSubmit = async (values: Record<string, unknown>) => {
     setIsSubmitting(true);
@@ -123,6 +192,12 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
         const raw = values[field.id];
 
         if (field.type === "file_upload" && raw instanceof File) {
+          // Validasi client-side tambahan sebelum upload (prompt U3).
+          if (raw.size > MAX_FILE_BYTES) {
+            setUploadStates((s) => ({ ...s, [field.id]: "error" }));
+            throw new Error(`${field.label}: ukuran melebihi ${MAX_FILE_MB} MB`);
+          }
+          setUploadStates((s) => ({ ...s, [field.id]: "uploading" }));
           const fd = new FormData();
           fd.append("file", raw);
           fd.append("formId", genericForm.id);
@@ -130,8 +205,10 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
 
           const result = await uploadFormAttachment(fd);
           if (!result.success || !result.url) {
+            setUploadStates((s) => ({ ...s, [field.id]: "error" }));
             throw new Error(result.error || `Gagal mengupload ${field.label}`);
           }
+          setUploadStates((s) => ({ ...s, [field.id]: "done" }));
           answers[field.id] = result.url;
         } else {
           answers[field.id] = raw ?? null;
@@ -148,31 +225,41 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
         throw new Error(result.error || "Gagal menyimpan respons. Silakan coba lagi.");
       }
 
-      router.push(`/form/${genericForm.slug}/success`);
+      // redirect_url dihormati jika ada (Fase 6/7 behavior dipertahankan).
+      const redirectUrl =
+        typeof genericForm.settings?.redirect_url === "string"
+          ? genericForm.settings.redirect_url
+          : `/form/${genericForm.slug}/success`;
+      router.push(redirectUrl);
     } catch (err: unknown) {
+      // U3: toast ramah, bukan alert(); tetap aman (tidak ada detail DB/stack).
       const msg = err instanceof Error ? err.message : "Terjadi kesalahan. Silakan coba lagi.";
-      alert(msg);
+      toast({
+        variant: "destructive",
+        title: "Gagal mengirim",
+        description: msg,
+      });
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="max-w-3xl w-full mx-auto pb-24 px-4 sm:px-6 relative z-10">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-44 pt-8 sm:px-6 sm:pb-32">
       <div className="mb-6">
-        <Button variant="ghost" asChild className="hover:bg-primary/10 text-primary">
+        <Button variant="ghost" asChild className="text-primary hover:bg-primary/10">
           <Link href="/">
-            <ArrowLeft className="w-4 h-4 mr-2" /> Kembali ke Beranda
+            <ArrowLeft className="mr-2 h-4 w-4" /> Kembali ke Beranda
           </Link>
         </Button>
       </div>
 
-      <Card className="border-t-8 border-t-accent shadow-xl bg-[#FAF6F0] rounded-3xl overflow-hidden">
-        <CardHeader className="bg-white pb-8 border-b border-border/50">
-          <div className="w-full flex items-center justify-center">
-            <div className="relative w-32 h-32 md:w-40 md:h-40 mb-2 rounded-full border-4 border-accent shadow-lg bg-white flex items-center justify-center p-2 z-10 overflow-hidden">
+      <Card className="overflow-hidden rounded-3xl border-t-8 border-t-accent bg-[#FAF6F0] shadow-xl">
+        <CardHeader className="border-b border-border/50 bg-white pb-8">
+          <div className="flex w-full items-center justify-center">
+            <div className="relative z-10 mb-2 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-accent bg-white p-2 shadow-lg md:h-40 md:w-40">
               <Image
                 src={PMK_LOGO_URL}
-                alt="PMK ITERA Logo"
+                alt="Logo PMK ITERA"
                 width={150}
                 height={150}
                 className="object-contain"
@@ -180,13 +267,17 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
               />
             </div>
           </div>
-          <CardTitle className="font-serif text-3xl md:text-4xl text-primary font-bold">{genericForm.title}</CardTitle>
+          {/* U5 a11y: judul form memakai <h1> (CardTitle me-render <div>,
+              bukan heading — setiap halaman harus punya tepat satu <h1>). */}
+          <h1 className="font-serif text-3xl font-bold text-primary md:text-4xl">
+            {genericForm.title}
+          </h1>
           {genericForm.description && (
-            <CardDescription className="text-base text-foreground/80 mt-4 whitespace-pre-wrap leading-relaxed">
+            <CardDescription className="mt-4 whitespace-pre-wrap text-base leading-relaxed text-foreground/80">
               {genericForm.description}
             </CardDescription>
           )}
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className="mt-2 text-xs text-muted-foreground">
             Jenis: <span className="font-semibold capitalize">{genericForm.form_type}</span> • Tutup:{" "}
             {new Date(genericForm.close_date).toLocaleDateString("id-ID", {
               day: "numeric",
@@ -194,16 +285,47 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
               year: "numeric",
             })}
           </p>
+
+          {showProgress && requiredFieldIds.length > 0 ? (
+            <div className="mt-6 space-y-2" aria-live="polite">
+              <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                <span>Progres pengisian</span>
+                <span className="tabular-nums">{progress}%</span>
+              </div>
+              <Progress value={progress} className="h-2" />
+            </div>
+          ) : null}
         </CardHeader>
 
         <CardContent className="pt-8">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form
+              id="main-form"
+              onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+              className="space-y-6"
+              noValidate
+            >
               {rendererFields.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">Form ini belum memiliki pertanyaan.</p>
+                <p className="py-8 text-center text-muted-foreground">
+                  Form ini belum memiliki pertanyaan.
+                </p>
               ) : (
                 rendererFields.map((rf) => (
-                  <FormFieldRenderer key={rf.id} fieldConfig={rf} control={form.control} />
+                  <div key={rf.id} className="space-y-1.5">
+                    <FormFieldRenderer fieldConfig={rf} control={form.control} />
+                    {/* Status unggah file (prompt U3) */}
+                    {rf.type === "file_upload" && uploadStates[rf.id] ? (
+                      <FileUploadStatus
+                        state={uploadStates[rf.id]}
+                        label={rf.label}
+                      />
+                    ) : null}
+                    {rf.type === "file_upload" ? (
+                      <p className="text-xs text-muted-foreground">
+                        Maksimal {MAX_FILE_MB} MB. Format umum saja (PDF, JPG, PNG, DOCX).
+                      </p>
+                    ) : null}
+                  </div>
                 ))
               )}
 
@@ -212,29 +334,71 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
                   <TurnstileWidget siteKey={turnstileSiteKey as string} onToken={setTurnstileToken} />
                 </div>
               )}
-
-              <div className="pt-8">
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full text-lg py-6 bg-accent hover:bg-accent/90 text-accent-foreground rounded-2xl shadow-lg transition-transform hover:scale-[1.01]"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-6 h-6 mr-3 animate-spin" /> Sedang Mengirim...
-                    </>
-                  ) : (
-                    "Kirim Respons"
-                  )}
-                </Button>
-                <p className="text-center text-sm text-muted-foreground mt-4 font-medium italic">
-                  Pastikan semua data sudah terisi dengan benar.
-                </p>
-              </div>
             </form>
           </Form>
         </CardContent>
       </Card>
+
+      {/* Bar aksi bawah sticky — aman safe-area, tidak tertutup keyboard.
+          Tetap dalam viewport normal; pb-44 di atas memberi ruang. */}
+      <div
+        ref={submitBarRef}
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-border/60 bg-[#FAF6F0]/95 backdrop-blur supports-[backdrop-filter]:bg-[#FAF6F0]/80"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 py-3 sm:px-6">
+          <Button
+            type="submit"
+            form="main-form"
+            disabled={isSubmitting}
+            className="h-12 flex-1 rounded-2xl bg-accent text-base font-semibold text-accent-foreground shadow-lg transition-transform hover:scale-[1.01] hover:bg-accent/90 disabled:opacity-60"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-3 h-5 w-5 animate-spin" /> Sedang mengirim…
+              </>
+            ) : (
+              "Kirim Respons"
+            )}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
+
+/** Teks status unggah yang jelas + ikon (prompt U3). */
+function FileUploadStatus({
+  state,
+  label,
+}: {
+  state: UploadState;
+  label: string;
+}) {
+  if (state === "uploading") {
+    return (
+      <p className="flex items-center gap-1.5 text-xs font-medium text-primary">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Mengunggah {label}…
+      </p>
+    );
+  }
+  if (state === "done") {
+    return (
+      <p className="flex items-center gap-1.5 text-xs font-medium text-primary">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        {label} berhasil diunggah
+      </p>
+    );
+  }
+  if (state === "error") {
+    return (
+      <p className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+        <UploadCloud className="h-3.5 w-3.5" />
+        {label} gagal diunggah. Periksa ukuran/koneksi, lalu coba lagi.
+      </p>
+    );
+  }
+  return null;
+}
+FileUploadStatus.displayName = "FileUploadStatus";

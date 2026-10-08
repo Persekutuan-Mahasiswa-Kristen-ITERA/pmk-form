@@ -556,3 +556,468 @@ Tidak ada perubahan kode/migration — hanya dokumentasi.
 - `user_roles` = 0 baris; `selection_results` = 54 baris
 - Signup publik aktif (`disable_signup: false`) — **harus dimatikan saat rollout**
 - Tidak ada route `/recruitment/[slug]` atau `/admin/recruitments` (klaim dokumen lama salah)
+
+---
+
+## UI OVERHAUL — U1: Fondasi desain (branch `feat/ui-foundation`)
+
+**Status:** selesai, menunggu verifikasi visual di checkpoint U1.
+
+Tujuan (lihat `PROMPT_UI_OVERHAUL_PMK_FORM.md`): membangun sistem desain bersama
+yang dipakai semua halaman, responsif mobile-first (Android + iOS), plus
+halaman 404/error/loading yang selaras brand. Token warna/font/logo TIDAK
+berubah (batasan 1).
+
+### Yang dikerjakan
+
+**Token & global (presentasional, tanpa warna/font baru):**
+- `app/layout.tsx`: tambah `export const viewport` — `viewportFit: "cover"`
+  (iOS safe-area) + `themeColor: "#F8F6F0"` (sama dengan token `--background`).
+- `app/globals.css`: definisi utility `scrollbar-hide` (sebelumnya dead class —
+  dipakai di navbar admin + filter landing tapi tidak pernah didefinisikan) dan
+  `pt-safe`/`pb-safe` (`env(safe-area-inset-*)`).
+- `eslint.config.mjs`: diperbaiki — config lama mengimpor
+  `eslint-config-next/core-web-vitals` tanpa ekstensi (Node ESM strict), lalu
+  setelah ditambah `.js` ketahuan config Next 15.5 berformat eslintrc warisan
+  (`{extends, rules}`), bukan flat config. Solusi: `FlatCompat` dari
+  `@eslint/eslintrc` (sudah jadi dependensi eslint, tidak ada dependency baru).
+  Hasil: `npx eslint .` akhirnya jalan setelah sekian lama rusak.
+
+**Helper murni (server-safe, unit-tested):**
+- `lib/format.ts`: `formatDate` (id-ID, zona WIB via `Intl.DateTimeFormat` —
+  konsisten terlepas dari zona server Vercel UTC), `daysUntil` (hari kalender
+  WIB), `isPast`, `lastMonths` (bucket bulan + label Indonesia untuk grafik),
+  `bucketizeByMonth` (agregasi respons per bulan).
+- `lib/form-status.ts`: `getFormStatus()` — SATU sumber label status
+  (`not_open`/`open`/`closing_soon`/`closed`). "Aktif" tetap memakai definisi
+  tunggal `isFormActive()` dari `lib/forms` (Fase 2-4); file ini hanya
+  menerjemahkan ke label + kelas. `CLOSING_SOON_DAYS = 7`.
+
+**Komponen bersama:**
+- `components/admin-shell.tsx` + `components/admin-nav.tsx`: navbar admin
+  responsif. Desktop: sticky, logo + "PMK Admin" + menu ikon + identitas user +
+  Keluar; ada state aktif per-route (`usePathname`, teks accent + latar halus).
+  Mobile (<lg): bar ringkas + drawer `Sheet` sisi kiri (keputusan U0-a) berisi
+  menu (min-height 44px), identitas user, dan tombol Keluar. Menu Admin & Audit
+  Log hanya untuk `super_admin`.
+- `components/public-shell.tsx`: header ringan (logo terpusus) + footer untuk
+  halaman publik.
+- `components/page-header.tsx`, `components/section-card.tsx`,
+  `components/stat-card.tsx` (varian `warning` dari token `destructive`),
+  `components/badges.tsx` (`StatusBadge` — teks wajib + titik; `CategoryBadge`
+  — warna dipetakan dari `FormCard`), `components/empty-state.tsx`,
+  `components/segmented-control.tsx`, `components/confirm-dialog.tsx`
+  (pengganti `window.confirm()` untuk aksi destruktif),
+  `components/responsive-table.tsx` (tabel desktop → daftar kartu di < md),
+  `components/skeleton.tsx`, `components/ui/sheet.tsx` (dibangun di atas
+  `@radix-ui/react-dialog` — pola resmi shadcn, tanpa dependency baru).
+
+**Halaman state (bagian 6 prompt):**
+- `app/not-found.tsx` (404 global, `noindex`, tombol sekunder berbeda untuk
+  admin vs publik — ditentukan di server tanpa membocorkan rute admin),
+- `app/form/[slug]/not-found.tsx` (pesan aman "tidak ditemukan atau sudah
+  ditutup" — tidak membedakan slug salah vs form ditutup, sesuai RLS),
+- `app/error.tsx` (root error boundary, pesan generik + `Coba lagi`, hanya log
+  digest anonim),
+- `app/global-error.tsx` (merender `<html>`+`<body>` sendiri karena bypass
+  root layout; inline style karena layout/font di-bypass),
+- `app/admin/(dashboard)/not-found.tsx` (404 area admin),
+- 403 `Akses Ditolak` di layout admin dipoles pakai token + `<PMKLogo />`
+  (logika `getAdminUser()` TIDAK diubah),
+- `app/loading.tsx` (root), `app/admin/(dashboard)/loading.tsx`,
+  `app/form/[slug]/loading.tsx` — skeleton bermerek menggantikan spinner polos.
+
+**Integrasi:** `app/admin/(dashboard)/layout.tsx` sekarang merender
+`<AdminShell>` (navbar lama yang tidak responsif dihapus; logika 403 tetap).
+
+**Tes:** `tests/format.test.ts` + `tests/form-status.test.ts` — 26 tes baru.
+
+### Verifikasi
+
+- `npx tsc --noEmit`: **0 error**.
+- `npx eslint app/ components/ lib/ tests/`: **0 error/warning**. (`npx eslint .`
+  masih 2 error di `scripts/analyze-bundle.js` — **pre-existing**, bukan file
+  U1; `git stash` konfirmasi tidak ada perubahan di file itu.)
+- `npm run test:unit`: **69 pass / 0 fail** (43 existing + 26 baru).
+- `next build`: **BELUM bisa dijalankan** — butuh env Supabase
+  (`NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY`/`SERVICE_ROLE_KEY`) yang tidak ada di
+  environment ini.
+- **Verifikasi visual DILAKUKAN** (browser headless via `browser_exec`, viewport
+  360/390/768/1024/1440 — `vision_analyze` ditolak model, jadi pakai DOM +
+  computed-style assertions + screenshot):
+  - **404 global** (`/halaman-tidak-ada`): judul, teks, tombol "Kembali ke
+    beranda" + "Lihat formulir" tampil benar; **0 horizontal overflow** di semua
+    viewport; judul `Halaman tidak ditemukan — PMK ITERA`.
+  - **404 form** (`/form/slug-tidak-ada`): h1 "Formulir tidak ditemukan atau
+    sudah ditutup" tampil (pesan aman, tidak membedakan slug salah vs form
+    ditutup).
+  - **Landing** `/`: h1 "Portal Formulir PMK ITERA", 0 overflow semua viewport.
+  - **`/admin/dashboard` tanpa login**: redirect ke `/admin/login` (proxy.ts
+    utuh, tidak diubah).
+  - **403 "Akses Ditolak"**: tampil benar (layout group + `getAdminUser`,
+    logika tidak diubah).
+  - **Drawer mobile 360px**: terbuka dengan benar, judul "Menu Admin", 4 menu
+    (Dashboard/Formulir/Admin/Audit Log — Admin & Audit Log muncul karena role
+    demo super_admin), **tinggi item tepat 44px**, tombol Tutup + Keluar di
+    dalam drawer, **0 overflow** saat drawer terbuka.
+  - **SegmentedControl**: klik "6 bulan"/"12 bulan" memperbarui
+    `aria-checked` dengan benar (role=radiogroup).
+  - **ConfirmDialog**: tombol "Hapus (demo konfirmasi)" membuka dialog
+    (judul "Hapus formulir?", deskripsi, Batal + Hapus permanen); Batal
+    menutup; Hapus permanen menutup + menjalankan handler; **0 overflow**.
+  - **ResponsiveTable**: di 360px wrapper tabel `display:none` + kartu mobile
+    `display:flex` (5 kartu); di 768px & 1024px kebalikannya (tabel tampil,
+    kartu disembunyikan) — breakpoint `md` bekerja.
+  - **StatusBadge/CategoryBadge**: semua 5 status + 5 kategori punya TEKS
+    (status tidak hanya berbasis warna, sesuai aturan 3.G).
+  - `next build` setelah U1: **sukses, 0 error, 15 route**.
+
+### Catatan keamanan
+
+- Semua halaman state memakai pesan generik (tidak ada stack trace, tidak ada
+  detail rute/DB). `error.tsx` hanya log `error.digest` (anonim).
+- 404 global memutuskan tombol sekunder lewat `getAdminUser()` di server;
+  pengguna non-admin hanya melihat tombol publik — tidak ada kebocoran
+  keberadaan rute admin.
+- 404 form tidak membedakan "slug tidak ada" vs "form ditutup" (RLS mengembalikan
+  null untuk keduanya bagi non-admin).
+- Otorisasi tidak diubah: `getAdminUser()` di layout, `requireAdmin()` di server
+  action, RLS Supabase, dan `proxy.ts` tetap sebagaimana adanya.
+
+### Risiko/regresi
+
+- `AdminShell` menggantikan navbar lama — bila ada halaman admin yang mengandalkan
+  class `highlight`/struktur lama, perlu dicek visual di U2.
+- `Sheet` (drawer mobile) baru — perlu diuji di HP nyata (buka/tutup, fokus trap,
+  tombol Keluar di dalam drawer).
+- Rollback: `git revert` commit U1; navbar lama masih ada di `git log`.
+
+---
+
+## UI OVERHAUL — U2: Dashboard + shell admin (branch `feat/ui-admin-dashboard`)
+
+**Status:** selesai (build ✓, tsc ✓, eslint 0 warning, 69 unit test ✓), menunggu
+verifikasi visual di checkpoint U2.
+
+Sesuai bagian 3 prompt: dashboard dirombak memakai sistem desain U1
+(`PageHeader`, `SectionCard`, `StatCard`, `StatusBadge`/`CategoryBadge`,
+`ResponsiveTable`), plus grafik "Respons per periode" yang **sebelumnya kosong**
+(kerusakan referensi paling jelas — prompt 0) kini menampilkan data nyata.
+
+### File baru
+
+- `lib/dashboard.ts` — agregasi server-side. Query `form_responses` **hanya
+  memilih `submitted_at`** dan query `forms` hanya `open_date, created_at,
+  is_deleted` — tidak pernah mengambil `answers`/`files` (batasan 3.E prompt:
+  jangan tarik data responden untuk agregasi). Bucketing per bulan kalender
+  **WIB** lewat `lastMonths`/`bucketizeByMonth` (`lib/format.ts`), jadi "6 bulan
+  terakhir" konsisten terlepas dari zona server (Vercel = UTC). `getTotalResponseCount`
+  memakai `count: "exact"` + `head: true`.
+- `app/actions/dashboard-chart.ts` — `"use server"` wrapper. **Wajib terpisah**
+  dari `lib/dashboard.ts`: client component tidak boleh mengimpor modul yang
+  memakai `next/headers` (`createClient`) atau build gagal.
+- `components/responses-chart.tsx` — grafik SVG murni, **tanpa dependency baru**
+  (prompt 4). Batang = respons (`chart-1` koral), garis+titik = form dibuka
+  (`chart-2` teal). Tooltip hover/tap, `<title>`+`<desc>`, tabel `sr-only`,
+  empty state jelas saat `total === 0`.
+- `components/responses-chart-card.tsx` — client wrapper: `SegmentedControl`
+  6/12 bulan + skeleton saat memuat ulang (lewat `useTransition`).
+
+### Perubahan
+
+- `app/admin/(dashboard)/dashboard/page.tsx` — dipakai ulang utuh:
+  - Banner peringatan (`3.F`) muncul hanya jika ada form aktif dengan
+    `close_date` ≤ 7 hari; nama form dirender sebagai **JSX** (bukan string
+    HTML — React escape otomatis), maks 3 + "dan N lainnya".
+  - 4 `StatCard` (`3.D`): Formulir aktif, Respons masuk (+N bulan ini, netral
+    bila 0/turun), Segera ditutup (varian warning), Kategori dipakai.
+  - Grafik (`3.E`) + legenda.
+  - Tabel "Formulir terbaru" (`3.G`) memakai `ResponsiveTable` + aksi baris
+    `FormQuickActions` (server action existing: Tutup/Buka, Duplikasi, Hapus).
+    **Tidak ada tombol palsu** (batasan 3 prompt).
+  - `revalidate = 60` (ISR Fase 8-4) dipertahankan.
+
+### Verifikasi
+
+- `npx tsc --noEmit`: 0 error.
+- `npx eslint` (4 file): 0 error, 0 warning.
+- `npm run test:unit`: 69/69 lulus.
+- `npm run build`: sukses, 0 error, 15 route (semua `ƒ` dinamis; dashboard
+  tetap server-rendered on demand sesuai `revalidate`).
+
+### Catatan keamanan
+
+- Otorisasi tidak diubah: `getResponseChartData`/`getMonthlyResponseStats`/
+  `getTotalResponseCount` memanggil `requireAdmin()`; `getAllForms()` sudah
+  memanggilnya. `loadChartAction` mewarisi otorisasi `getResponseChartData`.
+- Tidak ada data responden (`answers`) yang diambil untuk grafik.
+- Banner hanya mendaftar form yang **aktif** — form tertutup disembunyikan
+  (tidak membocorkan form yang sudah berakhir).
+
+### Risiko/regresi
+
+- `getResponseChartData` mengambil SEMUA `submitted_at` dalam rentang lalu
+  membucket di JS — pada dataset respons sangat besar (>50rb/bln) query ini
+  bisa jadi berat. Opsi bila muncul: SQL `date_trunc` RPC atau `head`+range
+  per bulan. Dataset saat ini jauh lebih kecil.
+- `forms.open_date` difilter lewat `is_deleted = false`; form sampah
+  (soft-delete) tidak dihitung di grafik tapi tetap muncul di `getAllForms`
+  (dashboard memakai `isFormActive` untuk filternya sendiri).
+- Rollback: `git revert` commit U2; `dashboard/page.tsx` lama ada di `git log`.
+
+---
+
+## UI OVERHAUL — U3: Halaman publik mobile-first (branch `feat/ui-public`)
+
+**Status:** selesai. Verifikasi: tsc ✓, eslint 0 error/warning, 69 unit test ✓,
+build ✓ (15 route). Verifikasi visual: landing desktop lolos (Chromium headless
++ analisis gambar), form page mobile lolos, cek overflow horizontal via CDP di
+390/768/1280px: **nol di semua viewport**.
+
+### File yang dirombak
+
+**`components/GenericFormRenderer.tsx`** (inti `/form/[slug]` — "halaman
+terpenting untuk mobile")
+- **Bar aksi bawah sticky** dengan tombol "Kirim Respons" + padding
+  `env(safe-area-inset-bottom)` — tidak tertutup keyboard; `pb-44`/`pb-32`
+  memberi ruang agar konten terakhir tidak tertutup bar.
+- **Indikator progres** (`<Progress>`) saat `settings.show_progress` — menghitung
+  hanya bidang wajib agar persentase stabil, `aria-live` untuk pembaca layar.
+- **Scroll ke error pertama** + `focus()` saat submit gagal validasi
+  (`form.handleSubmit(onSubmit, onInvalid)`).
+- **Upload file**: validasi ukuran client-side (10 MB), status eksplisit
+  (`Mengunggah…` / `berhasil diunggah` / `gagal diunggah…`), petunjuk
+  tipe/ukuran di bawah field.
+- **Toast** (bukan `alert()`) untuk error submit/rate limit; tombol submit
+  `disabled` saat proses (cegah double submit).
+- `redirect_url` tetap dihormati dari `settings` (router.push).
+- Logika bisnis TIDAK diubah: skema Zod dinamis, `uploadFormAttachment`,
+  `submitFormResponseAction`, Turnstile (`require_captcha !== false`).
+
+**`app/form/[slug]/success/page.tsx`** — dijadikan server component
+- Settings (`thank_you_message`, `wa_group_link`) diambil di **server** via
+  `getFormBySlug` (RLS berlaku) — sebelumnya query anon client ke tabel `forms`.
+- **QR code dihapus** (prompt hanya minta "tombol menonjol"; menghapus
+  dependency client berat `react-qr-code` + layout mobile yang sempit).
+- **Gerbang "Selesai" dihapus**: dulu tombol kembali disabled sampai user
+  centang "sudah gabung grup" — pendaftar bisa terjebak. Sekarang tombol
+  "Kembali ke Beranda" selalu aktif.
+- Konfirmasi jelas: ikon `CheckCircle2` besar + judul serif + `whitespace-pre-wrap`
+  untuk thank_you_message.
+- `robots: noindex`.
+
+**`app/page.tsx`** (landing)
+- Dibungkus `PublicShell` (header + footer tunggal); footer lokal yang ganda
+  dihapus.
+- **Hero diringkas** (prompt: "hero ringkas"): logo besar di hero **dihapus**
+  karena `PublicShell` sudah menampilkan logo di header — sebelumnya dua logo
+  berdekatan dan hero mengisi ±90% tinggi viewport, mendorong kartu formulir
+  ke bawah fold. Verifikasi visual konfirmasi: setelah perbaikan, filter chip
+  + kartu formulir terlihat tanpa scroll.
+- Filter chip: scroll horizontal di mobile (`justify-start` + `overflow-x-auto`),
+  terpusat di desktop; `scrollbar-hide` yang tak terdefinisi di config
+  DIPERTAHANKAN untuk sementara (kelas utilitas lama, bukan error).
+- Empty state ditingkatkan: teks ramah + penjelasan + tautan
+  "Lihat semua kategori" saat ada filter kategori aktif.
+- Grid: 1 kolom mobile / 2 tablet / 3 desktop (sudah benar sebelumnya).
+
+**`app/form/[slug]/page.tsx`** — dibungkus `PublicShell`; kartu "Form Ditutup"
+  tetap netral (batasan 6: tidak membedakan "slug tidak ada" vs "form ditutup").
+
+### `/hasil` (Cek Hasil)
+
+**Tidak ada** — grep di seluruh `app/` dan `components/` tidak menemukan route
+maupun tautan `/hasil`. Halaman ini tidak dibuat (prompt menyebutnya "bila
+berlaku"). Bila nanti dibutuhkan, pola U3 sudah siap dipakai.
+
+### Verifikasi visual (Catatan: model vision untuk mobile/tablet sempat
+gagal — `minimax-m3` EOL; desktop & form-mobile berhasil dianalisis)
+
+- Landing desktop 1280×900: 1 logo, filter + kartu terlihat di fold, footer
+  ada, tidak ada overflow/tumpang tindih. Lolos.
+- Form page mobile 390×844: header tipis, field satu kolom full-width,
+  sticky bar "Kirim Respons", target sentuh ±44–50px, tidak ada overflow. Lolos.
+- Overflow horizontal dicek terprogram via CDP:
+  `document.documentElement.scrollWidth > window.innerWidth` = **false** di
+  390px, 768px, 1280px.
+
+### Catatan keamanan
+
+- Success page: query anon client ke `forms` dihapus — data settings sekarang
+  dilindungi RLS server-side.
+- Form Ditutup & 404 tetap tidak membocorkan apakah slug ada atau form ditutup.
+- Tidak ada server action/RLS/schema yang diubah; submit flow utuh.
+
+### Risiko/regresi
+
+- `GenericFormRenderer` sekarang mengandalkan `<Progress>` + `useToast`
+  (kompone UI U1 yang sudah ada). Bila `settings.show_progress` true pada form
+  dengan **0 bidang wajib**, indikator disembunyikan (guard
+  `requiredFieldIds.length > 0`).
+- Sticky bar memakai `form="main-form"` — tombol submit di luar `<form>`;
+  FITUR INI butuh browser modern (semua browser target 2026 mendukungnya).
+- Rollback: `git revert` commit U3 (2 commit).
+
+---
+
+## UI OVERHAUL — U4: Halaman admin lainnya (branch `feat/ui-admin-pages`)
+
+**Status:** selesai. Verifikasi: tsc ✓, eslint 0 error/warning (dibersihkan juga
+warning `ChartData` di dashboard), 69 unit test ✓, build ✓ (15 route),
+overflow horizontal nol di 390/768/1280px (CDP), `/admin/*` tanpa login tetap
+diarahkan ke login oleh proxy (307).
+
+### File yang dirombak
+
+**`app/admin/login/page.tsx`**
+- `min-h-screen` → `min-h-dvh` + padding `env(safe-area-inset-*)` (iPhone notch).
+- Judul "Admin Portal" diubah dari `CardTitle` (yang render `<div>`) menjadi
+  `<h1>` — aksesibilitas hierarki heading; setiap halaman admin sekarang punya
+  tepat satu `<h1>` (dari `PageHeader` atau halaman ini).
+- Tidak membocorkan apakah email ada di allowlist (pesan aman sudah ada).
+
+**`app/admin/(dashboard)/forms/page.tsx`** (penyimpanan terbesar, 248 baris)
+- `PageHeader` + dua `StatCard` + toolbar `FilterChip` (scroll horizontal mobile)
+  + `ResponsiveTable` (tabel desktop / kartu mobile) + `EmptyState` bertingkat.
+- `FormAdminCard` lama dihapus — menduplikasi badge & status; semua status &
+  kategori sekarang lewat `StatusBadge`/`CategoryBadge` (status selalu ada teks,
+  aturan 3.G).
+- Aksi baris tetap memakai `FormQuickActions` sungguhan (toggle/duplikat/hapus).
+
+**`components/GenericFormBuilder.tsx`** (builder `/new` & `/[id]`)
+- **PointerSensor dihapus**, gantinya `TouchSensor` (delay 200ms/tolerance 8) +
+  `KeyboardSensor` — PointerSensor menyerap pointer-down sehingga tombol
+  Duplikat/Hapus di kartu field sulit ditekan di layar sentuh.
+- **Tombol naik/turun** (`ArrowUp`/`ArrowDown`) ditambahkan sebagai alternatif
+  drag yang aksesibel (label ARIA, disabled di batas) — memakai `arrayMove`.
+- **Bar aksi bawah sticky** + `env(safe-area-inset-bottom)`: tombol Simpan & link
+  Pratinjau selalu terjangkau di mobile; tombol submit di luar `<form>` memakai
+  `form="builder-form"` (didukung browser modern). `pb-40` memberi ruang.
+- Struktur data form/field TIDAK diubah (batasan prompt).
+
+**`components/GenericResponseTable.tsx`** (halaman responses)
+- Hapus respons sekarang memakai `ConfirmDialog` bermerek (sebelumnya
+  `confirm()` native), state `pendingDeleteId` + `isDeleting` untuk loading.
+- `resolveAnswer` tetap dipakai (tidak diubah).
+
+**`app/admin/(dashboard)/users/page.tsx` + `AdminUsersClient.tsx`**
+- `PageHeader`; kartu akses-ditolak ad-hoc diganti `AccessDeniedCard`.
+- Hapus admin memakai `ConfirmDialog` (sebelumnya `confirm()`).
+
+**`app/admin/(dashboard)/audit/page.tsx`**
+- `PageHeader` + `SectionCard` + `ResponsiveTable` + `EmptyState`; error load
+  tetap aman (hanya pesan generik). Otorisasi super_admin utuh.
+
+**`app/admin/(dashboard)/forms/trash/page.tsx`**
+- Header lama (border-b ad-hoc) diseragamkan ke `PageHeader` + tombol kembali.
+
+**`components/SheetsSettingsPanel.tsx`** (panel di halaman edit form)
+- Backfill sinkronisasi memakai `ConfirmDialog` — ini `confirm()` native
+  **terakhir** di seluruh repo. Sekarang nol `window.confirm()`/`alert()`.
+
+**`app/admin/(dashboard)/dashboard/page.tsx`**
+- Hapus import `type ChartData` yang tak terpakai (warning eslint U2 tersisa).
+
+### Audit konsistensi & aksesibilitas
+
+- `grep confirm(` → **0 implementasi** native tersisa (hanya komentar).
+- Hierarki heading: setiap halaman admin punya 1 `<h1>` (`PageHeader` / login),
+  `SectionCard` memakai `<h2>`.
+- `/admin/*` tanpa login → 307 ke `/admin/login` (proxy, tidak diubah);
+  404 publik & form-not-found tidak membocorkan rute admin.
+
+### Verifikasi CDP (390/768/1280)
+
+- Login: kartu centered, tanpa overflow, pesan aman. Lolos.
+- 404 global: judul serif + tombol beranda. Lolos.
+- Form-not-found: pesan aman ("Formulir tidak ditemukan atau sudah ditutup"),
+  tidak membedakan slug hilang vs form ditutup. Lolos.
+- Catatan: probe CDP pertama ke beberapa route menabrak error boundary saat
+  koneksi Supabase cold-start; ulangan sehat. Bukan regresi UI.
+
+### Risiko/regresi
+
+- Bar aksi builder memakai `form="builder-form"` — butuh browser modern.
+- TouchSensor dengan delay 200ms: drag jadi sedikit lebih lambat reaktif di
+  mobile, imbangi tombol naik/turun yang lebih dapat diandalkan.
+- ResponsiveTable me-render children client (`FormQuickActions`) — komponen
+  induk tetap server component; Next menangani ini dengan benar (build OK).
+
+---
+
+## UI OVERHAUL — U5: QA dan polish (branch `chore/ui-qa`) — FINAL
+
+**Status:** selesai. UI Overhaul U1–U5 lengkap.
+
+Verifikasi: tsc ✓, eslint 0 error/warning, 69 unit test ✓, build ✓ (15 route),
+overflow horizontal **nol** di 360px & 390px, target sentuh **0 yang <44px** di
+390px (landing/form/login), verifikasi visual desktop+mobile lolos.
+
+### Perubahan U5
+
+**Target sentuh & input (kriteria penerimaan §8)**
+- `components/ui/button.tsx`: default `h-11`, sm `h-11`, lg `h-12`, icon
+  `h-11 w-11` (semua ≥44px — sebelumnya 32–40px).
+- `components/ui/input.tsx`: `h-9`→`h-11` (44px), tetap `text-base` (16px,
+  cegah zoom otomatis iOS saat fokus).
+- `FilterChip` (landing & admin) `min-h-[44px]` — sebelumnya **29px**, di bawah
+  standar sentuh; chip tetap proporsional (cek visual lolos).
+- `FormCard` CTA "Isi Form"/"Daftar Sekarang" `min-h-[44px]` (sebelumnya 36px).
+- Link header `PublicShell` `min-h-[44px]` (sebelumnya 33px).
+- `FormQuickActions`, `GenericResponseTable` (detail/hapus), opsi builder:
+  `min-h-[44px] min-w-[44px]`.
+
+**Aksesibilitas**
+- **Setiap halaman tepat satu `<h1>`**: judul form publik (`GenericFormRenderer`)
+  & "Admin Portal" (`login`) diubah dari `CardTitle` (yang me-render `<div>`)
+  menjadi `<h1>`; halaman admin mendapat `<h1>` dari `PageHeader`, `SectionCard`
+  memakai `<h2>`.
+- **Semua tombol ikon sekarang punya `aria-label`**, bukan hanya `title`
+  (`FormQuickActions`, `GenericResponseTable`, `AdminUsersClient`,
+  `GenericFormBuilder` naik/turun/duplikat/hapus-opsi).
+
+**QA & dokumen**
+- `window.confirm()`/`alert()` native: **0** di seluruh repo (backfill Sheets
+  adalah yang terakhir, diperbaiki di U4).
+- Tidak ada komponen tak terpakai; tidak ada dependency baru (`package.json`
+  tidak berubah dari main).
+- `docs/UI_GUIDE.md` dibuat: prinsip, daftar komponen bersama, pola responsif
+  (44px, safe-area, TouchSensor bukan PointerSensor), cara menambah halaman
+  publik/admin, daftar 404/error/loading, checklist verifikasi 7 langkah.
+- `README.md`: hapus referensi `/hasil` (route **tidak pernah dibuat** —
+  lihat catatan U3) + tambahkan admin routes yang benar & link UI_GUIDE.
+- Test tanggal (`tests/format.test.ts`, `tests/form-status.test.ts`) yang
+  hardcode 2026-10-06/07 diubah jadi relatif `Date.now()` — test gagal karena
+  tanggal lewat, **bukan bug kode**; `formatDate`/`bucketizeByMonth` tetap
+  pakai timestamp tetap (deterministik, tidak terpengaruh).
+
+### Checklist kriteria penerimaan (§8 prompt)
+
+- [x] Warna, font, logo identik — tidak ada token baru tanpa catatan di
+      `DESIGN_TOKENS.md`.
+- [x] Tidak ada scroll horizontal di 360px & 390px (CDP: `scrollWidth ===
+      innerWidth` di semua route publik).
+- [x] Target sentuh ≥44px (CDP: 0 elemen <44px di landing/form/login 390px;
+      button/input dasar diatur ke 44px).
+- [x] Input 16px+ (input.tsx `text-base`); `min-h-dvh` + safe-area di bar
+      bawah form/builder.
+- [x] Dashboard sesuai referensi: grafik data nyata + skeleton + empty state +
+      alternatif aksesibel (tombol 6/12 bulan + tabel sr-only).
+- [x] Tidak ada tombol palsu; aksi destruktif pakai ConfirmDialog; otorisasi
+      server (`requireAdmin`/RLS) tidak berubah sama sekali.
+- [x] 404 global, 404 form, error, 403, loading, empty state ada, bermerek,
+      tanpa kebocoran teknis.
+- [x] Semua halaman punya state loading/kosong/error.
+- [x] tsc, eslint, build bersih; tidak ada secret/PII baru (env service-account
+      hanya email publik, private key tidak pernah ke client).
+- [x] Tidak ada dependency baru.
+
+### Risiko/regresi
+
+- Tombol & input dasar jadi lebih tinggi (36→44px): layout padat di tabel
+  admin/`FormQuickActions` bisa terlihat sedikit berbeda — cek visual lolos,
+  tidak ada overflow baru.
+- `h-11` pada input file/upload: tombol "Choose file" diikuti tinggi input,
+  bukan masalah (border-box).
+- Test sekarang memakai `Date.now()` untuk kasus relatif — deterministik untuk
+  selisih hari, tidak untuk tanggal mutlak (sengaja).

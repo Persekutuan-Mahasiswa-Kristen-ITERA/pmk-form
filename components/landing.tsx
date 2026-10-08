@@ -69,7 +69,9 @@ export function FilterChip({
   return (
     <Link
       href={href}
-      className={`px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-all shrink-0 border shadow-sm whitespace-nowrap ${
+      // U5 a11y: target sentuh minimal 44px di mobile (kriteria penerimaan §8),
+      // chip terlihat proporsional (py-1.5 + min-h) tanpa jadi terlalu besar.
+      className={`flex min-h-[44px] items-center px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold transition-all shrink-0 border shadow-sm whitespace-nowrap ${
         active
           ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
           : "bg-white text-foreground/70 border-border/50 hover:bg-secondary/50 hover:border-accent/30"

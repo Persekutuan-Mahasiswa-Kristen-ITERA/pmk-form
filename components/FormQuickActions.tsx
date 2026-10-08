@@ -93,7 +93,7 @@ export function FormQuickActions({
       <Button
         variant="ghost"
         size="sm"
-        className="h-8 text-xs"
+        className="min-h-[44px] text-xs"
         disabled={pending}
         onClick={handleToggle}
         title={isOpen ? "Tutup form" : "Buka form"}
@@ -104,20 +104,22 @@ export function FormQuickActions({
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8 text-muted-foreground hover:text-primary"
+        className="min-h-[44px] min-w-[44px] text-muted-foreground hover:text-primary"
         disabled={pending}
         onClick={handleDuplicate}
+        aria-label="Duplikasi form (salinan dibuat dalam keadaan ditutup)"
         title="Duplikasi form (salinan dibuat dalam keadaan ditutup)"
       >
-        <Copy className="w-3.5 h-3.5" />
+        <Copy className="h-4 w-4" />
       </Button>
 
       <Button
         variant="ghost"
         size="icon"
-        className={`h-8 w-8 ${confirming ? "text-destructive" : "text-muted-foreground hover:text-destructive"}`}
+        className={`min-h-[44px] min-w-[44px] ${confirming ? "text-destructive" : "text-muted-foreground hover:text-destructive"}`}
         disabled={pending}
         onClick={handleDelete}
+        aria-label={confirming ? "Klik sekali lagi untuk konfirmasi hapus" : "Hapus form"}
         title={
           confirming
             ? "Klik sekali lagi untuk konfirmasi hapus"
@@ -126,7 +128,7 @@ export function FormQuickActions({
               : "Hapus form (kosong, tanpa respons)"
         }
       >
-        <Trash2 className="w-3.5 h-3.5" />
+        <Trash2 className="h-4 w-4" />
       </Button>
     </div>
   );

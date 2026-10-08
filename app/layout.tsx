@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
@@ -23,6 +23,20 @@ export const metadata: Metadata = {
   icons: {
     icon: "/pmk-logo.avif",
   },
+};
+
+/**
+ * Viewport mobile-first (UI Overhaul U1).
+ *
+ * - `viewportFit: "cover"` + `env(safe-area-inset-*)` di komponen bar tetap
+ *   agar navbar/bottom bar tidak tertutup notch atau home indicator iOS.
+ * - `themeColor` selaras dengan token `--background` (krem hangat).
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#F8F6F0",
 };
 
 export default function RootLayout({

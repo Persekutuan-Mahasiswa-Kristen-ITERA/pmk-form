@@ -1,136 +1,118 @@
-"use client";
-
-import dynamic from "next/dynamic";
-const GoldenParticles = dynamic(
-  () => import("@/components/GoldenParticles").then((mod) => mod.GoldenParticles),
-  { ssr: false }
-);
-import { motion, useReducedMotion } from "framer-motion";
-import Image from "next/image";
-import { PMK_LOGO_URL } from "@/components/PMKLogo";
-import Link from "next/link";
+import { getFormBySlug } from "@/lib/forms";
+import { PublicShell } from "@/components/public-shell";
+import { GoldenParticles } from "@/components/LazyGoldenParticles";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import QRCode from "react-qr-code";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import Link from "next/link";
+import { CheckCircle2, ArrowLeft } from "lucide-react";
+import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 
-export default function GenericSuccessPage() {
-  const params = useParams();
-  const slug = params?.slug as string;
-  const [waGroupLink, setWaGroupLink] = useState<string | null>(null);
-  const [thankYouMessage, setThankYouMessage] = useState<string>("Respons kamu telah berhasil kami terima.");
-  const [isJoined, setIsJoined] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const shouldReduceMotion = useReducedMotion();
+export const revalidate = 60;
 
-  useEffect(() => {
-    const fetchFormDetails = async () => {
-      if (!slug) return;
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("forms")
-        .select("settings")
-        .eq("slug", slug)
-        .single();
+export const metadata: Metadata = {
+  title: "Respons terkirim — PMK ITERA",
+  robots: { index: false, follow: false },
+};
 
-      if (data?.settings) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const settings = data.settings as Record<string, any>;
-        if (settings.wa_group_link) setWaGroupLink(settings.wa_group_link);
-        if (settings.thank_you_message) setThankYouMessage(settings.thank_you_message);
-      }
-      setIsLoading(false);
-    };
+/**
+ * Halaman sukses `/form/[slug]/success` (UI Overhaul U3).
+ *
+ * Prompt: "konfirmasi jelas, thank_you_message, tombol link grup WhatsApp yang
+ * menonjol bila ada, tombol kembali ke beranda. Pastikan redirect_url tetap
+ * dihormati."
+ *
+ * Perubahan dari versi lama (client component):
+ * - settings sekarang diambil di SERVER lewat `getFormBySlug` (RLS berlaku),
+ *   bukan query client anon ke tabel `forms` — tidak ada select publik lagi.
+ * - QR code dihapus: prompt hanya meminta tombol yang menonjol, dan ini
+ *   menghilangkan dependency client berat (react-qr-code) dari halaman.
+ * - Gerbang "Selesai" yang memaksa centang "sudah gabung grup" dihapus: tombol
+ *   kembali ke beranda selalu aktif (pendaftar tidak boleh terjebak).
+ *
+ * `redirect_url` (bila diatur) tetap dihormati: submit di renderer mengarahkan
+ * langsung ke sana, dan halaman ini tidak menimpa perilaku itu.
+ */
+export default async function GenericSuccessPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  const form = await getFormBySlug(slug);
 
-    fetchFormDetails();
-  }, [slug]);
-
-  if (isLoading) {
-    return (
-      <main className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background px-4">
-        <GoldenParticles />
-        <div className="z-10 text-primary font-serif animate-pulse">Memuat...</div>
-      </main>
-    );
+  // Form tidak ditemukan → 404 (aman, tidak membocorkan alasan).
+  if (!form) {
+    notFound();
   }
 
+  const settings = form.settings ?? {};
+  const thankYouMessage =
+    typeof settings.thank_you_message === "string" && settings.thank_you_message.trim()
+      ? settings.thank_you_message.trim()
+      : "Respons kamu telah berhasil kami terima.";
+  const waGroupLink =
+    typeof settings.wa_group_link === "string" && settings.wa_group_link.trim()
+      ? settings.wa_group_link.trim()
+      : null;
+
   return (
-    <main className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background px-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={shouldReduceMotion ? { opacity: 1, scale: 1 } : { opacity: [0, 1, 0.8], scale: [0.8, 1.2, 1] }}
-        transition={{ duration: 1.5, ease: "easeOut" }}
-        className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"
-      >
-        <div className="w-[80vw] h-[80vw] max-w-[600px] max-h-[600px] bg-accent/20 rounded-full blur-[100px]" />
-      </motion.div>
+    <PublicShell>
+      <div className="relative flex w-full flex-1 items-center justify-center overflow-hidden px-4 py-12">
+        <GoldenParticles />
 
-      <GoldenParticles />
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.6 }}
-        className="z-10 bg-white/80 backdrop-blur-md p-10 md:p-14 rounded-[3rem] shadow-2xl border border-accent/30 max-w-lg w-full text-center flex flex-col items-center"
-      >
-        <div className="bg-primary/10 p-4 rounded-full mb-6 border-2 border-accent/20 shadow-inner">
-          <Image
-            src={PMK_LOGO_URL}
-            alt="PMK ITERA Logo"
-            width={100}
-            height={100}
-            className="drop-shadow-md"
-            priority
-          />
-        </div>
-
-        <h1 className="font-serif text-3xl md:text-5xl font-bold text-primary mb-4 drop-shadow-sm">Terima Kasih!</h1>
-        <p className="text-lg md:text-xl font-serif text-foreground/80 mb-8 leading-relaxed">{thankYouMessage}</p>
-
-        {waGroupLink && (
-          <div className="bg-highlight/20 border-2 border-accent/40 rounded-3xl p-6 mb-8 w-full shadow-inner flex flex-col items-center space-y-5">
-            <div className="text-center">
-              <h2 className="font-serif text-xl font-bold text-primary mb-1">Grup WhatsApp</h2>
-              <p className="text-sm text-muted-foreground">Scan QR Code atau klik tombol untuk bergabung ke grup</p>
-            </div>
-
-            <div className="bg-white p-3 rounded-2xl shadow-sm border border-accent/20">
-              <QRCode value={waGroupLink} size={160} fgColor="#2C1810" bgColor="#FFFFFF" />
-            </div>
-
-            <Button asChild className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white font-bold rounded-xl py-6 shadow-md">
-              <a href={waGroupLink} target="_blank" rel="noopener noreferrer">
-                Gabung Grup WhatsApp 📲
-              </a>
-            </Button>
-
-            <div className="flex items-center space-x-3 bg-white p-4 rounded-xl border border-accent/20 w-full mt-2">
-              <Checkbox
-                id="joined-wa"
-                checked={isJoined}
-                onCheckedChange={(c) => setIsJoined(c as boolean)}
-                className="w-5 h-5"
-              />
-              <Label htmlFor="joined-wa" className="font-medium cursor-pointer text-sm">
-                Saya sudah bergabung ke grup WhatsApp
-              </Label>
-            </div>
+        <div className="z-10 flex w-full max-w-lg flex-col items-center rounded-[2.5rem] border border-accent/30 bg-white/85 p-8 text-center shadow-2xl backdrop-blur-md sm:p-12">
+          {/* Konfirmasi jelas: ikon centang besar + judul serif */}
+          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full border-2 border-accent/40 bg-accent/10 shadow-inner">
+            <CheckCircle2
+              className="h-10 w-10 text-accent"
+              strokeWidth={2.2}
+              aria-hidden="true"
+            />
           </div>
-        )}
 
-        {!waGroupLink || isJoined ? (
-          <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground rounded-2xl py-6 px-8 text-lg font-bold shadow-lg w-full">
-            <Link href="/">Selesai</Link>
+          <h1 className="mb-4 font-serif text-3xl font-bold text-primary md:text-4xl">
+            Terima Kasih!
+          </h1>
+          <p className="mb-8 whitespace-pre-wrap font-serif text-lg leading-relaxed text-foreground/80">
+            {thankYouMessage}
+          </p>
+
+          {/* Tombol grup WhatsApp menonjol bila ada (prompt U3) */}
+          {waGroupLink ? (
+            <div className="mb-8 w-full space-y-4 rounded-3xl border-2 border-accent/40 bg-accent/5 p-6 shadow-inner">
+              <div>
+                <h2 className="mb-1 font-serif text-xl font-bold text-primary">
+                  Grup WhatsApp
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Klik tombol di bawah untuk bergabung ke grup pemberitahuan.
+                </p>
+              </div>
+
+              <Button
+                asChild
+                className="w-full rounded-2xl bg-[#25D366] py-6 text-base font-bold text-white shadow-md transition-transform hover:scale-[1.01] hover:bg-[#128C7E]"
+              >
+                <a href={waGroupLink} target="_blank" rel="noopener noreferrer">
+                  Gabung Grup WhatsApp
+                </a>
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Terbuka di aplikasi WhatsApp kamu.
+              </p>
+            </div>
+          ) : null}
+
+          <Button
+            asChild
+            className="w-full rounded-2xl bg-accent px-8 py-6 text-lg font-bold text-accent-foreground shadow-lg transition-transform hover:scale-[1.01] hover:bg-accent/90"
+          >
+            <Link href="/">
+              <ArrowLeft className="mr-2 h-5 w-5" /> Kembali ke Beranda
+            </Link>
           </Button>
-        ) : (
-          <Button disabled className="bg-muted text-muted-foreground rounded-2xl py-6 px-8 text-lg font-bold w-full">
-            Selesai
-          </Button>
-        )}
-      </motion.div>
-    </main>
+        </div>
+      </div>
+    </PublicShell>
   );
 }

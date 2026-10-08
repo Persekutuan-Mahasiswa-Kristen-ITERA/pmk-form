@@ -18,6 +18,15 @@ Sistem Manajemen Form Serbaguna untuk seluruh divisi & kepanitiaan **PMK ITERA**
 
 ---
 
+## 🎨 Sistem Desain & Konvensi UI
+
+Lihat [docs/UI_GUIDE.md](./docs/UI_GUIDE.md) — token, komponen bersama, pola
+responsif (target sentuh 44px, tanpa scroll horizontal di 360px), cara menambah
+halaman baru, dan checklist verifikasi. Token warna/font ada di
+[docs/DESIGN_TOKENS.md](./docs/DESIGN_TOKENS.md).
+
+---
+
 ## 🏁 Cara Menjalankan Lokal
 
 ```bash
@@ -47,7 +56,8 @@ Buka `http://localhost:3000` di browser.
 - `/admin/forms/new` — Builder untuk membuat form baru
 - `/admin/forms/[id]` — Builder untuk mengedit form
 - `/admin/forms/[id]/responses` — Viewer respons & export CSV/ZIP
-- `/hasil` — Cek hasil seleksi (arsip rekrutmen lama + form baru via `form_responses`)
+- `/admin/forms/trash` — Form yang di-soft-delete (bisa dikembalikan)
+- `/admin/users` & `/admin/audit` — Manajemen admin & audit log (super admin)
 
 ---
 
