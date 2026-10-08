@@ -63,15 +63,15 @@ export function ResponsesChart({
   const openedValues = buckets.map((b) => formOpenedCounts[b.key] ?? 0);
   const maxValue = Math.max(1, ...values, ...openedValues);
 
-  // Geometry — mobile-first, lebar 100% via viewBox.
-  const W = 100;
-  const H = height;
-  const padX = 6;
+  // Geometry — grafik proporsional, max tinggi 200px.
+  const W = 600;
+  const H = Math.min(height, 200);
+  const padX = 20;
   const padTop = 14;
   const padBottom = 26; // label bulan
   const plotH = H - padTop - padBottom;
   const slotW = (W - padX * 2) / buckets.length;
-  const barW = Math.min(5.5, slotW * 0.5);
+  const barW = Math.min(28, slotW * 0.6);
 
   // Skala: nilai -> koordinat Y (dipetakan ke plotH).
   const y = (v: number) => padTop + plotH - (v / maxValue) * plotH;
@@ -109,8 +109,8 @@ export function ResponsesChart({
             y1={padTop + plotH - f * plotH}
             y2={padTop + plotH - f * plotH}
             stroke="hsl(var(--border))"
-            strokeWidth={0.35}
-            strokeDasharray={f === 0 ? undefined : "1.5 1.5"}
+            strokeWidth={1}
+            strokeDasharray={f === 0 ? undefined : "6 6"}
           />
         ))}
 
@@ -161,7 +161,7 @@ export function ResponsesChart({
                   y={H - 8}
                   textAnchor="middle"
                   className="fill-muted-foreground"
-                  style={{ fontSize: "3.2px" }}
+                  style={{ fontSize: "11px" }}
                 >
                   {buckets[i].label}
                 </text>
@@ -180,8 +180,8 @@ export function ResponsesChart({
             {(() => {
               const i = hovered;
               const x = padX + slotW * i + slotW / 2;
-              const tipW = 26;
-              const tipH = 12;
+              const tipW = 120;
+              const tipH = 22;
               // Jaga tooltip tetap di dalam kanvas.
               const tx = Math.min(
                 Math.max(x - tipW / 2, padX),
@@ -195,16 +195,16 @@ export function ResponsesChart({
                     y={ty}
                     width={tipW}
                     height={tipH}
-                    rx={1.5}
+                    rx={4}
                     className="fill-foreground"
                     opacity={0.92}
                   />
                   <text
                     x={tx + tipW / 2}
-                    y={ty + tipH / 2 + 1.1}
+                    y={ty + tipH / 2 + 4}
                     textAnchor="middle"
                     className="fill-background"
-                    style={{ fontSize: "3.4px", fontWeight: 600 }}
+                    style={{ fontSize: "11px", fontWeight: 600 }}
                   >
                     {`${buckets[i].label}: ${values[i]} respons`}
                   </text>

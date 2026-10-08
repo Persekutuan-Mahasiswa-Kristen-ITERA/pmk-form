@@ -32,7 +32,7 @@ export async function AdminShell({ children }: { children: React.ReactNode }) {
             href="/admin/dashboard"
             className="flex shrink-0 items-center gap-3 transition-transform hover:scale-105"
           >
-            <PMKLogo size={44} className="border-2" />
+            <PMKLogo size={48} className="border-2 md:h-14 md:w-14" />
             <span className="flex flex-col leading-tight">
               <span className="font-serif text-base font-bold text-primary">
                 PMK Admin
