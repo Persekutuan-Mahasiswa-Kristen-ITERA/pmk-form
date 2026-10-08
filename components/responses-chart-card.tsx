@@ -67,7 +67,7 @@ export function ResponsesChartCard({
           responseCounts={data.responseCounts}
           formOpenedCounts={data.formOpenedCounts}
           total={data.total}
-          height={200}
+          height={180}
         />
       )}
 

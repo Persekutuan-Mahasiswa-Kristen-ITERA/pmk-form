@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Users, Calendar, Eye, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAllForms, countResponsesForForms, countActiveForms } from "@/lib/forms";
 import { FormQuickActions } from "@/components/FormQuickActions";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge, CategoryBadge } from "@/components/badges";
-import { ResponsiveTable } from "@/components/responsive-table";
 import { EmptyState } from "@/components/empty-state";
-import type { FormType } from "@/types/forms";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import type { Form, FormType } from "@/types/forms";
 
 export const revalidate = 60; // Fase 8-4: ISR 60s (dulunya 0 = no cache)
 
@@ -113,43 +113,90 @@ export default async function FormsAdminPage({
           }
         />
       ) : (
-        <ResponsiveTable
-          caption="Daftar formulir"
-          columns={[
-            { header: "Formulir" },
-            { header: "Kategori", className: "w-[110px]" },
-            { header: "Status", className: "w-[140px]" },
-            { header: "Respons", className: "w-[90px] text-right" },
-            { header: "Aksi", className: "w-[170px] text-right" },
-          ]}
-          rows={formsWithCounts.map((form) => [
-            <Link
-              key={form.id}
-              href={`/admin/forms/${form.id}`}
-              className="font-semibold text-foreground hover:text-primary hover:underline"
-            >
-              {form.title}
-            </Link>,
-            <CategoryBadge key="cat" value={form.form_type} />,
-            <StatusBadge key="status" form={form} />,
-            <Link
-              key="resp"
-              href={`/admin/forms/${form.id}/responses`}
-              className="text-right font-bold tabular-nums text-foreground hover:text-primary hover:underline"
-            >
-              {form.responseCount}
-            </Link>,
-            <div key="aksi" className="flex justify-end gap-1.5">
-              <FormQuickActions
-                formId={form.id}
-                isOpen={form.is_open}
-                responseCount={form.responseCount}
-              />
-            </div>,
-          ])}
-        />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {formsWithCounts.map((form) => (
+            <FormAdminCard key={form.id} form={form} />
+          ))}
+        </div>
       )}
     </div>
+  );
+}
+
+function FormAdminCard({
+  form,
+}: {
+  form: Form & { responseCount: number };
+}) {
+  return (
+    <Card className="flex h-full flex-col justify-between transition-shadow hover:shadow-md">
+      <CardHeader className="space-y-2 p-4 pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <CategoryBadge value={form.form_type} />
+          <StatusBadge form={form} />
+        </div>
+        <h2 className="line-clamp-1 text-base font-bold leading-tight text-foreground">
+          <Link
+            href={`/admin/forms/${form.id}`}
+            className="hover:text-primary hover:underline"
+          >
+            {form.title}
+          </Link>
+        </h2>
+        <p className="line-clamp-2 text-xs text-muted-foreground">
+          {form.description || "Tidak ada deskripsi."}
+        </p>
+      </CardHeader>
+
+      <CardContent className="space-y-3 p-4 pt-2">
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" />
+            <span>{form.responseCount} Respons</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Calendar className="h-3.5 w-3.5" />
+            <span>
+              Tutup:{" "}
+              {new Date(form.close_date).toLocaleDateString("id-ID", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-t pt-3">
+          <Link
+            href={`/form/${form.slug}`}
+            target="_blank"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Eye className="h-3.5 w-3.5" /> Pratinjau
+          </Link>
+
+          <div className="flex items-center gap-1">
+            <FormQuickActions
+              formId={form.id}
+              isOpen={form.is_open}
+              responseCount={form.responseCount}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="min-h-[44px] text-xs"
+            >
+              <Link href={`/admin/forms/${form.id}/responses`}>
+                <FileText className="mr-1 h-3.5 w-3.5" /> Respons (
+                {form.responseCount})
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
