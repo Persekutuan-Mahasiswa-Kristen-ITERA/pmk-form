@@ -6,6 +6,7 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    poweredByHeader: false,
     // Fase 8-4: production optimizations
     // - output: 'standalone' reduces server bundle size
     // - compress: true (default) — brotli/gzip otomatis di Vercel
@@ -78,7 +79,7 @@ const nextConfig = {
                         key: 'Content-Security-Policy',
                         value:
                             "default-src 'self'; " +
-                            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://accounts.google.com https://www.googletagmanager.com; " +
+                            "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://accounts.google.com https://www.googletagmanager.com; " +
                             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
                             "img-src 'self' data: https:; " +
                             "font-src 'self' data: https://fonts.gstatic.com; " +

@@ -81,7 +81,12 @@ export async function bulkUpdateStatusAction(
 ) {
   await requireAdmin();
 
-  if (!Array.isArray(responseIds) || responseIds.length === 0) {
+  if (
+    !Array.isArray(responseIds) ||
+    responseIds.length === 0 ||
+    responseIds.length > 500 ||
+    responseIds.some((id) => !z.string().uuid().safeParse(id).success)
+  ) {
     return { success: false as const, error: "Tidak ada respons dipilih." };
   }
   if (status !== null && !VALID_STATUSES.includes(status)) {

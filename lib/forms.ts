@@ -121,9 +121,12 @@ export async function getOpenForms(options?: {
 
   // Filter ini harus konsisten dengan isFormActive().
   // Soft delete (Fase 7-6): form yang di-soft-delete tidak muncul di landing.
+  // Jangan gunakan select("*") pada endpoint publik. Selain mengirim field
+  // yang memang dibutuhkan renderer, itu juga membocorkan konfigurasi internal
+  // (mis. spreadsheet_id) ke setiap pengunjung melalui PostgREST/RSC.
   let query = supabase
     .from("forms")
-    .select("*")
+    .select("id, title, description, slug, form_type, is_open, open_date, close_date, form_fields, settings, created_at, updated_at, is_deleted, deleted_at")
     .eq("is_deleted", false)
     .eq("is_open", true)
     .lte("open_date", now)
@@ -160,9 +163,11 @@ export async function countOpenForms(): Promise<number> {
 /** Fetch a single form by slug (public). */
 export async function getFormBySlug(slug: string): Promise<Form | null> {
   const supabase = await createClient();
+  // Public form data must be an explicit allow-list. In particular, never
+  // expose sheets_config or created_by to anonymous visitors.
   const { data, error } = await supabase
     .from("forms")
-    .select("*")
+    .select("id, title, description, slug, form_type, is_open, open_date, close_date, form_fields, settings, created_at, updated_at, is_deleted, deleted_at")
     .eq("slug", slug)
     .eq("is_deleted", false)
     .single();
@@ -573,7 +578,9 @@ export async function checkDuplicateResponse(
     .eq("form_id", formId)
     .contains("answers", { [fieldId]: value });
 
-  if (error) return false; // fail-open for now; prevent blocking a real submission
+  // A database error must not silently turn the duplicate check into an
+  // allow-list. The caller will return a generic retryable error instead.
+  if (error) throw new Error("Gagal memeriksa respons sebelumnya.");
   return (count ?? 0) > 0;
 }
 

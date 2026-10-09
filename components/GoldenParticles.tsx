@@ -1,31 +1,45 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 interface Particle {
     id: number;
     x: number;
-    y: number;
     drift: number;
     size: number;
     duration: number;
     delay: number;
 }
 
+/**
+ * Dekorasi partikel emas melayang.
+ *
+ * Catatan optimasi: animasi sebelumnya memakai framer-motion (motion.div per
+ * partikel), yang menarik seluruh runtime framer-motion (~35–40 KB gzip) hanya
+ * untuk efek dekoratif. Sekarang animasi digerakkan murni oleh CSS keyframes
+ * (lihat kelas .particle-orb di globals.css) — berjalan di compositor, tanpa
+ * JS per frame. Hook useReducedMotion diganti cek matchMedia langsung.
+ */
 export function GoldenParticles() {
     const [particles, setParticles] = useState<Particle[]>([]);
-    const shouldReduceMotion = useReducedMotion();
+    const [shouldReduceMotion, setShouldReduceMotion] = useState(false);
 
     useEffect(() => {
-        if (shouldReduceMotion) return; // Do not generate floating particles if reduced motion is preferred
+        const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const update = () => setShouldReduceMotion(mq.matches);
+        update();
+        mq.addEventListener("change", update);
+        return () => mq.removeEventListener("change", update);
+    }, []);
+
+    useEffect(() => {
+        if (shouldReduceMotion) return;
 
         // Throttled generation to prevent main thread blocking during initial render
         const animationFrameId = requestAnimationFrame(() => {
             const newParticles: Particle[] = Array.from({ length: 30 }).map((_, i) => ({
                 id: i,
                 x: Math.random() * 100, // vw
-                y: Math.random() * 100, // vh
                 drift: Math.random() * 10 - 5,
                 size: Math.random() * 10 + 4, // px
                 duration: Math.random() * 20 + 15, // sec
@@ -42,29 +56,18 @@ export function GoldenParticles() {
             {/* Soft gradient overlay for the warm cream feel */}
             <div className="absolute inset-0 bg-gradient-to-b from-background to-secondary/30 opacity-70" />
 
-            {/* Floating Gold Orbs */}
+            {/* Floating Gold Orbs — CSS keyframes, compositor-friendly */}
             {!shouldReduceMotion && particles.map((p) => (
-                <motion.div
+                <div
                     key={p.id}
-                    className="absolute rounded-full bg-accent blur-[2px] opacity-30"
-                    style={{ willChange: "transform, opacity" }}
-                    initial={{
-                        x: `${p.x}vw`,
-                        y: "110vh",
+                    className="particle-orb absolute rounded-full bg-accent blur-[2px]"
+                    style={{
                         width: p.size,
                         height: p.size,
-                        opacity: 0,
-                    }}
-                    animate={{
-                        y: "-10vh",
-                        x: `${p.x + p.drift}vw`,
-                        opacity: [0, 0.4, 0.4, 0],
-                    }}
-                    transition={{
-                        duration: p.duration,
-                        repeat: Infinity,
-                        ease: "linear",
-                        delay: p.delay,
+                        left: `${p.x}vw`,
+                        animationDuration: `${p.duration}s`,
+                        animationDelay: `${p.delay}s`,
+                        ["--drift" as string]: `${p.drift}vw`,
                     }}
                 />
             ))}
