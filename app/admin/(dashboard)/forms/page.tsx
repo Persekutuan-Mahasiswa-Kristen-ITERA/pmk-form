@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { Form, FormType } from "@/types/forms";
 
-export const revalidate = 60; // Fase 8-4: ISR 60s (dulunya 0 = no cache)
+export const revalidate = 0; // Admin: daftar form real-time, tidak di-cache
 
 /**
  * Halaman daftar formulir admin (UI Overhaul U4).

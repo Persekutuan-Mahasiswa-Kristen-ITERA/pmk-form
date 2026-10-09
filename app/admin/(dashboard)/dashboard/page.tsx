@@ -19,7 +19,7 @@ import { ResponsesChartCard } from "@/components/responses-chart-card";
 import { FormQuickActions } from "@/components/FormQuickActions";
 import { Button } from "@/components/ui/button";
 
-export const revalidate = 60; // Fase 8-4: ISR 60s (dulunya 0 = no cache)
+export const revalidate = 0; // Admin dashboard: data real-time, tidak di-cache
 
 export default async function DashboardPage() {
   // U6: semua query independen dijalankan PARALEL (satu round-trip wall-clock

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   toggleFormOpenAction,
   deleteFormAction,
@@ -16,9 +17,10 @@ import { useRouter } from "next/navigation";
  * Aksi cepat kartu admin (Fase 4C).
  *
  * - Toggle buka/tutup 1-klik (tanpa buka halaman edit).
- * - Hapus form dengan konfirmasi ganda. Form berisi respons di-SOFT DELETE
- *   (Fase 7-6): disembunyikan dari dashboard, data tetap aman; bisa
- *   dikembalikan dari halaman sampah. Form kosong di-hard delete.
+ * - Hapus form via ConfirmDialog modal yang jelas (bukan pola 2-klik lama
+ *   yang membuat admin mengira "tidak terjadi apa-apa"). Form berisi respons
+ *   di-SOFT DELETE (Fase 7-6): disembunyikan dari dashboard, data tetap
+ *   aman; bisa dikembalikan dari halaman sampah. Form kosong di-hard delete.
  */
 export function FormQuickActions({
   formId,
@@ -30,7 +32,8 @@ export function FormQuickActions({
   responseCount: number;
 }) {
   const [pending, startTransition] = useTransition();
-  const [confirming, setConfirming] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
   const hasResponses = responseCount > 0;
@@ -49,25 +52,30 @@ export function FormQuickActions({
       });
     });
 
-  const handleDelete = () =>
-    startTransition(async () => {
-      if (!confirming) {
-        setConfirming(true);
+  const handleConfirmedDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await deleteFormAction(formId);
+      if (!res.success) {
+        toast({
+          title: "Gagal",
+          description: res.error,
+          variant: "destructive",
+        });
         return;
       }
-      setConfirming(false);
-      const res = await deleteFormAction(formId);
       toast({
-        title: res.success ? "Berhasil" : "Gagal",
-        description: res.success
-          ? res.softDeleted
-            ? "Form disembunyikan (soft delete). Data tetap aman; bisa dikembalikan dari sampah."
-            : "Form dihapus permanen."
-          : res.error,
-        variant: res.success ? "default" : "destructive",
+        title: "Berhasil",
+        description: res.softDeleted
+          ? "Form disembunyikan (soft delete). Data tetap aman; bisa dikembalikan dari sampah."
+          : "Form dihapus permanen.",
       });
-      if (res.success) router.refresh();
-    });
+      setConfirmOpen(false);
+      router.refresh();
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleDuplicate = () =>
     startTransition(async () => {
@@ -84,7 +92,6 @@ export function FormQuickActions({
         title: "Form diduplikasi",
         description: "Salinan dibuat dalam keadaan ditutup. Periksa dulu sebelum dibuka.",
       });
-      // Bawa admin langsung ke editor form baru untuk diperiksa.
       router.push(`/admin/forms/${res.data.id}`);
       router.refresh();
     });
@@ -130,20 +137,35 @@ export function FormQuickActions({
       <Button
         variant="ghost"
         size="icon"
-        className={`min-h-[44px] min-w-[44px] ${confirming ? "text-destructive" : "text-muted-foreground hover:text-destructive"}`}
-        disabled={pending}
-        onClick={handleDelete}
-        aria-label={confirming ? "Klik sekali lagi untuk konfirmasi hapus" : "Hapus form"}
+        className="min-h-[44px] min-w-[44px] text-muted-foreground hover:text-destructive"
+        disabled={pending || isDeleting}
+        onClick={() => setConfirmOpen(true)}
+        aria-label="Hapus form"
         title={
-          confirming
-            ? "Klik sekali lagi untuk konfirmasi hapus"
-            : hasResponses
-              ? `Hapus form (soft delete — ${responseCount} respons tetap tersimpan, bisa dikembalikan dari sampah)`
-              : "Hapus form (kosong, tanpa respons)"
+          hasResponses
+            ? `Hapus form (soft delete — ${responseCount} respons tetap tersimpan, bisa dikembalikan dari sampah)`
+            : "Hapus form (kosong, tanpa respons)"
         }
       >
         <Trash2 className="h-4 w-4" />
       </Button>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting) setConfirmOpen(open);
+        }}
+        title={hasResponses ? "Sembunyikan form ini?" : "Hapus form ini?"}
+        description={
+          hasResponses
+            ? `Form ini memiliki ${responseCount} respons, jadi akan di-SOFT DELETE: disembunyikan dari dashboard & landing, tetapi semua data respons tetap aman di database. Anda dapat mengembalikannya kapan saja dari halaman "Sampah".`
+            : "Form ini tidak memiliki respons, jadi akan dihapus permanen dari database. Tindakan ini tidak dapat dibatalkan."
+        }
+        confirmLabel={hasResponses ? "Sembunyikan" : "Hapus permanen"}
+        destructive
+        pending={isDeleting}
+        onConfirm={handleConfirmedDelete}
+      />
     </div>
   );
 }

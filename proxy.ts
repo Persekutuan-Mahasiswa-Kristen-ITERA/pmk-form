@@ -1,10 +1,28 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Gunakan Next 16 cookie cache: cookies() di-cache per-request, jadi
+// beberapa createServerClient() dalam satu request tidak re-parse cookie jar.
+import { cookies } from 'next/headers'
+
 export async function proxy(request: NextRequest) {
-    let supabaseResponse = NextResponse.next({
+    // Hanya rute yang butuh session yang membuat client Supabase.
+    // Halaman publik (/, /form/*) dan semua aset statis langsung diteruskan —
+    // sebelumnya setiap request melalui matcher memanggil auth.getUser(),
+    // yang menambah ~100-400ms round-trip ke Supabase bahkan untuk file statis.
+    const pathname = request.nextUrl.pathname
+    const needsSession =
+        pathname.startsWith('/admin') || pathname.startsWith('/auth/callback')
+
+    if (!needsSession) {
+        return NextResponse.next()
+    }
+
+    const supabaseResponse = NextResponse.next({
         request,
     })
+
+    const cookieStore = await cookies()
 
     // We need to create a Supabase client that can parse and set cookies
     const supabase = createServerClient(
@@ -13,16 +31,13 @@ export async function proxy(request: NextRequest) {
         {
             cookies: {
                 getAll() {
-                    return request.cookies.getAll()
+                    return cookieStore.getAll()
                 },
                 setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-                    supabaseResponse = NextResponse.next({
-                        request,
-                    })
-                    cookiesToSet.forEach(({ name, value, options }) =>
+                    cookiesToSet.forEach(({ name, value, options }) => {
+                        request.cookies.set(name, value)
                         supabaseResponse.cookies.set(name, value, options)
-                    )
+                    })
                 },
             },
         }
@@ -34,7 +49,7 @@ export async function proxy(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     // Protect /admin routes (except login)
-    if (request.nextUrl.pathname.startsWith('/admin') && !request.nextUrl.pathname.startsWith('/admin/login')) {
+    if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
         if (!user) {
             const url = request.nextUrl.clone()
             url.pathname = '/admin/login'
@@ -43,7 +58,7 @@ export async function proxy(request: NextRequest) {
     }
 
     // Redirect authenticated user away from login page
-    if (request.nextUrl.pathname === '/admin/login') {
+    if (pathname === '/admin/login') {
         if (user) {
             const url = request.nextUrl.clone()
             url.pathname = '/admin/dashboard'

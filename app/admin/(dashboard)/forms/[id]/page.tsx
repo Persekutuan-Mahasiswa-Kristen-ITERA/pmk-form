@@ -1,8 +1,15 @@
 import React from "react";
 import { notFound } from "next/navigation";
-import { GenericFormBuilder } from "@/components/GenericFormBuilder";
+import dynamic from "next/dynamic";
 import { SheetsSettingsPanel } from "@/components/SheetsSettingsPanel";
 import { getFormById } from "@/lib/forms";
+import { FormBuilderSkeleton } from "@/components/skeleton";
+
+// Code-splitting: GenericFormBuilder menarik @dnd-kit + react-hook-form.
+const GenericFormBuilder = dynamic(
+  () => import("@/components/GenericFormBuilder").then((m) => m.GenericFormBuilder),
+  { loading: () => <FormBuilderSkeleton /> },
+);
 
 export default async function EditFormPage({
   params,
