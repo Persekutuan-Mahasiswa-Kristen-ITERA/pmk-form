@@ -10,8 +10,7 @@ import Image from "next/image";
  * `next.config` sudah mengizinkan hostname `res.cloudinary.com`
  * (remotePatterns), jangan hapus.
  */
-export const PMK_LOGO_URL =
-  "https://res.cloudinary.com/dm3zixaz4/image/upload/v1772567328/PMK_LOGO-removebg-preview_oydcdq.avif";
+export const PMK_LOGO_URL = "/pmk-logo.avif";
 
 export const PMK_LOGO_ALT = "PMK ITERA Logo";
 

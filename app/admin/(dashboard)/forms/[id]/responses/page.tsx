@@ -1,7 +1,16 @@
 import React from "react";
 import { notFound } from "next/navigation";
 import { getFormById, getAllFormResponses } from "@/lib/forms";
-import { GenericResponseTable } from "@/components/GenericResponseTable";
+import dynamic from "next/dynamic";
+import { ResponsesTableSkeleton } from "@/components/skeleton";
+
+// Code-splitting: GenericResponseTable menarik JSZip + Papa.parse (~100KB+)
+// yang hanya dipakai untuk tombol export. Dimuat on-demand dengan skeleton
+// agar halaman admin lain (dashboard, daftar form) tetap ringan & cepat.
+const GenericResponseTable = dynamic(
+  () => import("@/components/GenericResponseTable").then((m) => m.GenericResponseTable),
+  { ssr: true, loading: () => <ResponsesTableSkeleton /> },
+);
 
 export const revalidate = 0; // Dynamic data
 
