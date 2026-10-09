@@ -87,7 +87,11 @@ export function GenericResponseTable({
   const handleDelete = async (id: string) => {
     setIsDeleting(true);
     try {
-      await deleteFormResponseAction(id, form.id);
+      const res = await deleteFormResponseAction(id, form.id);
+      if (!res.success) {
+        toast({ title: "Gagal", description: res.error ?? "Gagal menghapus respons.", variant: "destructive" });
+        return;
+      }
       setResponses((prev) => prev.filter((r) => r.id !== id));
       toast({ title: "Berhasil", description: "Respons berhasil dihapus." });
       setPendingDeleteId(null);
