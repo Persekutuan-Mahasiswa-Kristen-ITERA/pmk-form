@@ -3,6 +3,7 @@ import { GenericFormRenderer } from "@/components/GenericFormRenderer";
 import { GoldenParticles } from "@/components/LazyGoldenParticles";
 import { PublicShell } from "@/components/public-shell";
 import { notFound } from "next/navigation";
+import { isFormActive } from "@/lib/forms";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -24,8 +25,10 @@ export default async function GenericPublicFormPage({
   // Batasan prompt 6: 404 tidak membedakan "slug tidak ada" vs "form ditutup"
   // secara berlebihan — RLS mengembalikan null untuk keduanya. Di sini kita
   // hanya menampilkan kartu "Form Ditutup" yang netral.
-  const isExpired = new Date(form.close_date) <= new Date();
-  const isOpen = form.is_open && !isExpired;
+  // Keep the page gate identical to landing + submit: is_open, open_date and
+  // close_date must all be respected (otherwise a scheduled future form was
+  // visible and fillable through its direct slug URL).
+  const isOpen = isFormActive(form);
 
   if (!isOpen) {
     return (

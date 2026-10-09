@@ -226,10 +226,15 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
       }
 
       // redirect_url dihormati jika ada (Fase 6/7 behavior dipertahankan).
-      const redirectUrl =
+      const configuredRedirect =
         typeof genericForm.settings?.redirect_url === "string"
           ? genericForm.settings.redirect_url
-          : `/form/${genericForm.slug}/success`;
+          : "";
+      // Never let a database/configuration value turn a successful submission
+      // into an open redirect. Only same-origin absolute paths are accepted.
+      const redirectUrl = configuredRedirect.startsWith("/") && !configuredRedirect.startsWith("//") && !configuredRedirect.includes(":")
+        ? configuredRedirect
+        : `/form/${genericForm.slug}/success`;
       router.push(redirectUrl);
     } catch (err: unknown) {
       // U3: toast ramah, bukan alert(); tetap aman (tidak ada detail DB/stack).

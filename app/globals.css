@@ -25,6 +25,41 @@
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
+
+  /* Partikel emas dekoratif (GoldenParticles) — animasi CSS murni agar
+     berjalan di compositor tanpa framer-motion. */
+  .particle-orb {
+    top: 0;
+    opacity: 0;
+    animation-name: particle-float;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-fill-mode: both;
+    will-change: transform, opacity;
+  }
+}
+
+@keyframes particle-float {
+  0% {
+    transform: translate3d(0, 110vh, 0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.4;
+  }
+  90% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate3d(var(--drift, 0vw), -10vh, 0);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .particle-orb {
+    animation: none;
+  }
 }
 
 
