@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getAllForms, countFormResponses } from "@/lib/forms";
+import { getAllForms, countResponsesForForms } from "@/lib/forms";
 import { TrashFormsClient } from "@/components/TrashFormsClient";
 import { PageHeader } from "@/components/page-header";
 import type { Form } from "@/types/forms";
@@ -27,11 +27,9 @@ export default async function TrashPage() {
   // getAllForms(includeDeleted) sudah memfilter is_deleted = true).
   const deletedForms: Form[] = (forms ?? []).filter((f) => f.is_deleted);
 
-  // Hitung respons per form untuk info di kartu.
-  const counts = await Promise.all(
-    deletedForms.map(async (f) => [f.id, await countFormResponses(f.id)] as const)
-  );
-  const countsMap: Record<string, number> = Object.fromEntries(counts);
+  // Hitung respons per form dalam SATU query (sebelumnya: N query paralel,
+  // satu per form di sampah).
+  const countsMap = await countResponsesForForms(deletedForms.map((f) => f.id));
 
   return (
     <div className="space-y-6">

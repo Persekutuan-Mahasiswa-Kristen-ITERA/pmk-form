@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 /**
  * OAuth callback (Fase 5-3).
@@ -12,9 +12,36 @@ import { createClient } from "@/lib/supabase/server";
  * DEFINER TANPA PARAMETER. Aplikasi TIDAK pernah mengirim email dari client.
  * Lihat migrations/009 LANGKAH 5 untuk aturannya (email_confirmed_at wajib,
  * hanya user_id NULL atau pemilik, disabled tak bisa reaktivasi).
+ *
+ * Catatan implementasi: route handler TIDAK boleh memakai next/headers
+ * (cookies()) di Next 16, jadi cookie dibaca dari request dan ditulis ke
+ * response redirect di akhir. `lib/supabase/server` (yang memakai
+ * next/headers) tidak bisa dipakai di sini.
  */
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    return NextResponse.redirect(
+      new URL("/admin/login?error=server_misconfigured", request.url)
+    );
+  }
+
+  // Kumpulkan cookie yang harus ditulis (mis. session hasil exchange) dan
+  // terapkan ke response redirect di akhir — route handler tidak punya akses
+  // set ke next/headers cookies().
+  const cookiesToSet: { name: string; value: string; options: CookieOptions }[] = [];
+
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cs) {
+        cookiesToSet.push(...cs);
+      },
+    },
+  });
 
   // request.url selalu valid (disediakan framework), tapi dibungkus defensif
   // agar callback tidak pernah melempar 500 ke pengguna.
@@ -58,7 +85,12 @@ export async function GET(request: NextRequest) {
   // Mencegah open redirect ke domain attacker.
   const safeNext = sanitizeNextPath(nextParam);
 
-  return NextResponse.redirect(new URL(safeNext, requestUrl.origin));
+  const response = NextResponse.redirect(new URL(safeNext, requestUrl.origin));
+  // Terapkan cookie session hasil exchangeCodeForSession ke response redirect.
+  for (const cookie of cookiesToSet) {
+    response.cookies.set(cookie.name, cookie.value, cookie.options);
+  }
+  return response;
 }
 
 /**

@@ -7,14 +7,32 @@
  * hanya berbasis warna — teks wajib ada. Karena itu setiap entri membawa
  * `label`.
  *
- * Definisi "aktif" memakai `isFormActive()` dari `lib/forms` (definisi tunggal
- * Fase 2-4) — file ini hanya menerjemahkan ke label/kelas tampilan, tidak
- * menciptakan definisi baru.
+ * Definisi "aktif" memakai `isFormActive()` (definisi tunggal Fase 2-4, kini
+ * didefinisikan di file ini supaya bisa dipakai di Client Component tanpa
+ * menarik dependency `lib/supabase/server`) — file ini hanya menerjemahkan ke
+ * label/kelas tampilan, tidak menciptakan definisi baru.
  *
  * Semua fungsi murni (pure) supaya bisa diuji unit tanpa env/DB.
  */
 
-import { isFormActive } from "@/lib/forms";
+/**
+ * Definisi tunggal "form aktif" (Fase 2-4).
+ *
+ * Form aktif = is_open true, sudah mulai (open_date lewat/absent), dan belum
+ * tutup (close_date belum lewat). Tidak ada panggilan DB — aman dipakai di
+ * mana saja, termasuk Client Component.
+ */
+export function isFormActive(form: {
+  is_open: boolean | null;
+  open_date: string | null;
+  close_date: string | null;
+}): boolean {
+  if (!form.is_open) return false;
+  const now = Date.now();
+  if (form.open_date && new Date(form.open_date).getTime() > now) return false;
+  if (form.close_date && new Date(form.close_date).getTime() <= now) return false;
+  return true;
+}
 
 export type FormStatusKind =
   | "not_open" // sekarang < open_date (belum dibuka)

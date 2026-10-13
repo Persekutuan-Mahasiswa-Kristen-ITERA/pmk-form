@@ -26,10 +26,21 @@ export function FormQuickActions({
   formId,
   isOpen,
   responseCount,
+  onToggled,
+  onDeleted,
 }: {
   formId: string;
   isOpen: boolean;
   responseCount: number;
+  /**
+   * Notifikasi perubahan status ke parent supaya badge diperbarui optimistic
+   * (React 18: state lokal parent, bukan useOptimistic). Dipanggil dengan nilai
+   * baru saat aksi dimulai, dan dipanggil lagi dengan nilai lama bila gagal
+   * (rollback).
+   */
+  onToggled?: (formId: string, isOpen: boolean) => void;
+  /** Notifikasi penghapusan sukses supaya parent menghapus baris/kartu. */
+  onDeleted?: (formId: string) => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -40,7 +51,13 @@ export function FormQuickActions({
 
   const handleToggle = () =>
     startTransition(async () => {
+      // Optimistic: badge langsung berubah sebelum server menjawab.
+      onToggled?.(formId, !isOpen);
       const res = await toggleFormOpenAction(formId, !isOpen);
+      if (!res.success) {
+        // Rollback ke nilai lama.
+        onToggled?.(formId, isOpen);
+      }
       toast({
         title: res.success ? "Berhasil" : "Gagal",
         description: res.success
@@ -71,7 +88,14 @@ export function FormQuickActions({
           : "Form dihapus permanen.",
       });
       setConfirmOpen(false);
-      router.refresh();
+      // Hapus baris/kartu langsung (optimistic) — action sudah memanggil
+      // revalidatePath di server, jadi tidak perlu router.refresh() yang
+      // me-render ulang seluruh halaman.
+      if (onDeleted) {
+        onDeleted(formId);
+      } else {
+        router.refresh();
+      }
     } finally {
       setIsDeleting(false);
     }
@@ -92,8 +116,9 @@ export function FormQuickActions({
         title: "Form diduplikasi",
         description: "Salinan dibuat dalam keadaan ditutup. Periksa dulu sebelum dibuka.",
       });
+      // Navigasi ke salinan baru. duplicateFormAction sudah revalidatePath,
+      // jadi router.refresh() tidak diperlukan (halaman tujuan fresh).
       router.push(`/admin/forms/${res.data.id}`);
-      router.refresh();
     });
 
   return (

@@ -25,18 +25,12 @@ import type {
  *
  * Satu helper ini dipakai bersama oleh: landing page, dashboard admin, dan
  * `countActiveForms()`. Jangan menulis definisi sebanding di tempat lain.
+ *
+ * Implementasi live di `lib/form-status.ts` (pure, tanpa dependency DB) supaya
+ * bisa dipakai di Client Component. Re-export di sini agar import lama
+ * (`@/lib/forms`) tetap berfungsi.
  */
-export function isFormActive(form: {
-  is_open: boolean | null;
-  open_date: string | null;
-  close_date: string | null;
-}): boolean {
-  if (!form.is_open) return false;
-  const now = Date.now();
-  if (form.open_date && new Date(form.open_date).getTime() > now) return false;
-  if (form.close_date && new Date(form.close_date).getTime() <= now) return false;
-  return true;
-}
+export { isFormActive } from "@/lib/form-status";
 
 /**
  * Field identitas otomatis (Fase 3-2a).
@@ -518,6 +512,27 @@ export async function countFormResponses(formId: string): Promise<number> {
 
   if (error) throw new Error(`Gagal menghitung respons: ${error.message}`);
   return count ?? 0;
+}
+
+/**
+ * Count responses grouped by form_id for ALL forms — single query, TANPA
+ * perlu daftar id form lebih dulu. Memungkinkan pemanggil (dashboard)
+ * menjalankannya paralel bersama query lain, bukan serial setelah daftar
+ * form tersedia.
+ */
+export async function countAllResponsesByForm(): Promise<Record<string, number>> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("form_responses").select("form_id");
+
+  if (error) return {};
+
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const fid = row.form_id;
+    if (fid) counts[fid] = (counts[fid] ?? 0) + 1;
+  }
+  return counts;
 }
 
 /**

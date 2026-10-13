@@ -38,6 +38,15 @@ const nextConfig = {
     // Fase 8-4: bundle optimizations
     experimental: {
         optimizePackageImports: ['lucide-react', 'framer-motion'],
+        // staleTimes.dynamic: kunjungan ulang & back/forward ke halaman dinamis
+        // (dashboard, daftar form, halaman respons) langsung tampil dari snapshot,
+        // lalu Next merevalidasi di latar belakang. Sebelumnya setiap back/forward
+        // me-render ulang full (beberapa round-trip ke Supabase Tokyo).
+        // Mutasi data tetap aman: server action memanggil revalidatePath sehingga
+        // cache dibatalkan tepat setelah perubahan penting.
+        staleTimes: {
+            dynamic: 30,
+        },
     },
     
     // Fase 8-4: compression & caching

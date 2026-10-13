@@ -45,39 +45,45 @@ export async function getResponseChartData(
   const buckets = lastMonths(months);
   // Awal bucket pertama, dalam UTC (untuk filter query DB).
   const startDate = new Date(`${buckets[0].key}-01T00:00:00Z`);
+  const startIso = startDate.toISOString();
 
-  // --- Respons per bulan ---
-  // select hanya submitted_at; filter rentang waktu agar tidak tarik semua
-  // baris respons. `count: "exact"` tidak bisa dipakai bersama grouping
-  // non-trivial di PostgREST, jadi ambil kolomnya lalu bucket di JS.
-  const { data: responseRows, error: responseError } = await supabase
-    .from("form_responses")
-    .select("submitted_at")
-    .gte("submitted_at", startDate.toISOString())
-    .order("submitted_at", { ascending: true });
+  // Dua query independen dijalankan PARALEL (satu round-trip wall-clock,
+  // sebelumnya berurutan = dua round-trip ke Supabase Tokyo).
+  const [responseResult, formResult] = await Promise.all([
+    // --- Respons per bulan ---
+    // select hanya submitted_at; filter rentang waktu agar tidak tarik semua
+    // baris respons. `count: "exact"` tidak bisa dipakai bersama grouping
+    // non-trivial di PostgREST, jadi ambil kolomnya lalu bucket di JS.
+    supabase
+      .from("form_responses")
+      .select("submitted_at")
+      .gte("submitted_at", startIso)
+      .order("submitted_at", { ascending: true }),
+    // --- Form dibuka per bulan ---
+    // Ambil form yang open_date (fallback created_at) jatuh dalam periode.
+    // Filter or: open_date >= start, ATAU (open_date null DAN created_at >= start).
+    supabase
+      .from("forms")
+      .select("open_date, created_at, is_deleted")
+      .eq("is_deleted", false)
+      .or(`open_date.gte.${startIso},and(open_date.is.null,created_at.gte.${startIso})`)
+      .order("created_at", { ascending: true }),
+  ]);
 
-  if (responseError) {
-    throw new Error(`Gagal memuat data respons: ${responseError.message}`);
+  if (responseResult.error) {
+    throw new Error(`Gagal memuat data respons: ${responseResult.error.message}`);
   }
 
-  const submittedDates = (responseRows ?? []).map(
+  const submittedDates = (responseResult.data ?? []).map(
     (row: { submitted_at: string }) => row.submitted_at,
   );
   const responseCounts = bucketizeByMonth(submittedDates, buckets);
 
-  // --- Form dibuka per bulan ---
-  // Ambil form yang open_date (fallback created_at) jatuh dalam periode.
-  const { data: formRows, error: formError } = await supabase
-    .from("forms")
-    .select("open_date, created_at, is_deleted")
-    .eq("is_deleted", false)
-    .order("created_at", { ascending: true });
-
-  if (formError) {
-    throw new Error(`Gagal memuat data form: ${formError.message}`);
+  if (formResult.error) {
+    throw new Error(`Gagal memuat data form: ${formResult.error.message}`);
   }
 
-  const openedDates = (formRows ?? [])
+  const openedDates = (formResult.data ?? [])
     // open_date null jarang terjadi (NOT NULL di produksi); fallback created_at
     .map((row: { open_date: string | null; created_at: string }) =>
       row.open_date ?? row.created_at,

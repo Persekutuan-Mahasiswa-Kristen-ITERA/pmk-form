@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import dynamic from "next/dynamic";
 import { SheetsSettingsPanel } from "@/components/SheetsSettingsPanel";
 import { getFormById } from "@/lib/forms";
+import { getSheetsStatus } from "@/lib/sheets/status";
 import { FormBuilderSkeleton } from "@/components/skeleton";
 
 // Code-splitting: GenericFormBuilder menarik @dnd-kit + react-hook-form.
@@ -28,6 +29,10 @@ export default async function EditFormPage({
   // Private key TIDAK PERNAH dikirim ke client.
   const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ?? null;
 
+  // Status sinkronisasi di-fetch di server (bukan useEffect) supaya tidak ada
+  // request kedua setelah halaman dirender.
+  const sheetsStatus = await getSheetsStatus(form.id);
+
   return (
     <div className="space-y-8">
       <GenericFormBuilder initialData={form} />
@@ -35,6 +40,7 @@ export default async function EditFormPage({
         formId={form.id}
         initialConfig={form.sheets_config ?? null}
         serviceAccountEmail={serviceAccountEmail}
+        initialStatus={sheetsStatus}
       />
     </div>
   );

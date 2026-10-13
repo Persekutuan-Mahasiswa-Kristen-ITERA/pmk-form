@@ -31,6 +31,9 @@ export function AdminUsersClient({
   const [email, setEmail] = useState("");
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
+  // State lokal daftar admin supaya perubahan (aktif/nonaktif/hapus) langsung
+  // terlihat tanpa router.refresh(). Rollback otomatis bila server menolak.
+  const [memberList, setMemberList] = useState(members);
 
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +53,17 @@ export function AdminUsersClient({
 
   const handleSetStatus = (member: AdminMember, status: "active" | "disabled") => {
     startTransition(async () => {
+      // Optimistic: badge berubah seketika.
+      setMemberList((prev) =>
+        prev.map((m) => (m.id === member.id ? { ...m, status } : m))
+      );
       const res = await setAdminStatusAction(member.id, status);
+      if (!res.success) {
+        // Rollback ke status lama.
+        setMemberList((prev) =>
+          prev.map((m) => (m.id === member.id ? { ...m, status: member.status } : m))
+        );
+      }
       toast({
         title: res.success ? "Berhasil" : "Gagal",
         description: res.success
@@ -79,6 +92,9 @@ export function AdminUsersClient({
         description: res.success ? `${member.email} dihapus dari allowlist.` : res.error,
         variant: res.success ? "default" : "destructive",
       });
+      if (res.success) {
+        setMemberList((prev) => prev.filter((m) => m.id !== member.id));
+      }
       setPendingDelete(null);
     });
   };
@@ -116,13 +132,13 @@ export function AdminUsersClient({
       {/* Daftar admin */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Daftar Admin ({members.length})</CardTitle>
+          <CardTitle className="text-lg">Daftar Admin ({memberList.length})</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {members.length === 0 ? (
+          {memberList.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">Belum ada admin.</p>
           ) : (
-            members.map((m) => {
+            memberList.map((m) => {
               const isSelf = m.user_id === currentUserId;
               const statusVariant =
                 m.status === "active" ? "default" : m.status === "invited" ? "secondary" : "destructive";

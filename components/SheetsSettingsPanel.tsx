@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { Sheet, Loader2, RefreshCw, UploadCloud, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -27,10 +27,17 @@ export function SheetsSettingsPanel({
   formId,
   initialConfig,
   serviceAccountEmail,
+  initialStatus,
 }: {
   formId: string;
   initialConfig: { spreadsheet_id?: string; sheet_name?: string; enabled?: boolean } | null;
   serviceAccountEmail: string | null;
+  initialStatus: {
+    pending: number;
+    failed: number;
+    synced: number;
+    lastSyncedAt: string | null;
+  } | null;
 }) {
   const [spreadsheetId, setSpreadsheetId] = useState(initialConfig?.spreadsheet_id ?? "");
   const [sheetName, setSheetName] = useState(initialConfig?.sheet_name ?? "Sheet1");
@@ -40,7 +47,7 @@ export function SheetsSettingsPanel({
     failed: number;
     synced: number;
     lastSyncedAt: string | null;
-  } | null>(null);
+  } | null>(initialStatus);
   const [pending, startTransition] = useTransition();
   // U4: konfirmasi backfill memakai ConfirmDialog (bukan window.confirm(),
   // batasan 6 — aksi yang menyentuh seluruh data respons). Variabel `pending`
@@ -48,14 +55,6 @@ export function SheetsSettingsPanel({
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [backfillRunning, setBackfillRunning] = useState(false);
   const { toast } = useToast();
-
-  // Ambil status sinkronisasi saat mount (hanya bila sudah aktif).
-  useEffect(() => {
-    if (!initialConfig?.enabled) return;
-    void getSheetsStatusAction(formId).then((res) => {
-      if (res.success) setStatus(res.status);
-    });
-  }, [formId, initialConfig?.enabled]);
 
   const handleSave = () =>
     startTransition(async () => {
