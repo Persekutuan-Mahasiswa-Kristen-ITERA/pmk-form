@@ -3,16 +3,17 @@
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 export function SignOutButton() {
-    const router = useRouter();
     const supabase = createClient();
 
     const handleSignOut = async () => {
         await supabase.auth.signOut();
-        router.push("/admin/login");
-        router.refresh();
+        // Hard navigation, bukan router.push: session sudah dihapus, dan kita
+        // harus membuang snapshot RSC (client cache) supaya tombol "kembali"
+        // tidak menampilkan halaman admin yang ditinggalkan setelah logout.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.href = "/admin/login";
     };
 
     return (

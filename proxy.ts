@@ -1,83 +1,100 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Gunakan Next 16 cookie cache: cookies() di-cache per-request, jadi
-// beberapa createServerClient() dalam satu request tidak re-parse cookie jar.
-import { cookies } from 'next/headers'
-
+/**
+ * Proxy (middleware) — gerbang awal rute admin.
+ *
+ * Catatan penting soal desain ini:
+ * - Matcher sudah dipersempit ke /admin/* dan /auth/callback. Halaman publik
+ *   (/, /form/*) dan semua aset statis TIDAK melalui proxy, jadi tidak ada
+ *   pemeriksaan auth untuk mereka.
+ * - Gating rute memakai auth.getClaims() (tersedia @supabase/supabase-js >=
+ *   2.115): verifikasi SIGNATURE + kadaluarsa JWT secara LOKAL, tanpa
+ *   round-trip ke server Supabase untuk setiap request. Sesuai arahan Supabase,
+ *   getClaims() menangani kedua jenis JWT signing key: jika project memakai
+ *   asymmetric keys, verifikasi memakai JWKS yang di-cache; jika masih memakai
+ *   symmetric (HS256) secret, otomatis fallback ke getUser() — jadi behavior
+ *   tidak pernah lebih lemah dari sebelumnya.
+ * - getClaims() tanpa argumen memakai session dari cookie (bisa auto-refresh
+ *   bila access token akan kedaluarsa); hasil refresh diteruskan ke response
+ *   melalui setAll() di bawah.
+ * - Proxy hanya gerbang awal: otorisasi sebenarnya tetap dilakukan
+ *   requireAdmin()/RLS di server, yang memverifikasi ulang identitas dengan
+ *   getUser() + query admin_members.
+ */
 export async function proxy(request: NextRequest) {
-    // Hanya rute yang butuh session yang membuat client Supabase.
-    // Halaman publik (/, /form/*) dan semua aset statis langsung diteruskan —
-    // sebelumnya setiap request melalui matcher memanggil auth.getUser(),
-    // yang menambah ~100-400ms round-trip ke Supabase bahkan untuk file statis.
-    const pathname = request.nextUrl.pathname
-    const needsSession =
-        pathname.startsWith('/admin') || pathname.startsWith('/auth/callback')
-
-    if (!needsSession) {
-        return NextResponse.next()
-    }
-
-    const supabaseResponse = NextResponse.next({
+    // Response ini dibuat sekali di sini dan dipakai untuk SEMUA jalur keluar
+    // (termasuk redirect), supaya cookie hasil setAll() — misalnya refresh
+    // token — tidak hilang saat browser diarahkan ke halaman lain.
+    const response = NextResponse.next({
         request,
     })
 
-    const cookieStore = await cookies()
-
-    // We need to create a Supabase client that can parse and set cookies
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
             cookies: {
                 getAll() {
-                    return cookieStore.getAll()
+                    return request.cookies.getAll()
                 },
                 setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) => {
+                    cookiesToSet.forEach(({ name, value }) => {
                         request.cookies.set(name, value)
-                        supabaseResponse.cookies.set(name, value, options)
+                    })
+                    cookiesToSet.forEach(({ name, value, options }) => {
+                        response.cookies.set(name, value, options)
                     })
                 },
             },
         }
     )
 
-    // This will also refresh the session if necessary
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
+    // Verifikasi JWT secara lokal. Signature access token diceek, jadi payload
+    // (termasuk sub) tidak bisa dipalsukan dari sisi klien. Error (mis. token
+    // kedaluarsa yang tidak bisa di-refresh) diperlakukan sama seperti tidak
+    // ada session: redirect ke login.
+    const { data } = await supabase.auth.getClaims()
+    const userId = data?.claims.sub
 
-    // Protect /admin routes (except login)
-    if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
-        if (!user) {
+    const pathname = request.nextUrl.pathname
+
+    // Lindungi rute /admin kecuali halaman login.
+    if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
+        if (!userId) {
             const url = request.nextUrl.clone()
             url.pathname = '/admin/login'
-            return NextResponse.redirect(url)
+            return withCookies(NextResponse.redirect(url), response)
         }
     }
 
-    // Redirect authenticated user away from login page
-    if (pathname === '/admin/login') {
-        if (user) {
-            const url = request.nextUrl.clone()
-            url.pathname = '/admin/dashboard'
-            return NextResponse.redirect(url)
-        }
+    // Arahkan user yang sudah login menjauhi halaman login.
+    if (pathname === '/admin/login' && userId) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/admin/dashboard'
+        return withCookies(NextResponse.redirect(url), response)
     }
 
-    return supabaseResponse
+    return response
+}
+
+/**
+ * Salin cookie dari `response` (yang mungkin sudah diisi setAll) ke response
+ * redirect, supaya session hasil refresh tidak hilang saat redirect.
+ */
+function withCookies(target: NextResponse, source: NextResponse): NextResponse {
+    for (const cookie of source.cookies.getAll()) {
+        target.cookies.set(cookie)
+    }
+    return target
 }
 
 export const config = {
     matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * Feel free to modify this pattern to include more paths.
-         */
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        // Rute yang butuh cek session: area admin dan callback OAuth.
+        // Aset statis, halaman publik, dan endpoint publik lain tidak
+        // melalui proxy sama sekali.
+        '/admin/:path*',
+        '/auth/callback',
     ],
 }

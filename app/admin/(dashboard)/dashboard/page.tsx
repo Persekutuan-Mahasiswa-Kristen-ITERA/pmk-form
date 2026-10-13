@@ -1,4 +1,4 @@
-import { getAllForms, countResponsesForForms } from "@/lib/forms";
+import { getAllForms, countAllResponsesByForm } from "@/lib/forms";
 import { computeFormStats, FORM_CATEGORIES } from "@/components/landing";
 import {
   getResponseChartData,
@@ -13,23 +13,23 @@ import { AlertTriangle, PlusCircle } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
 import { StatCard } from "@/components/stat-card";
-import { StatusBadge, CategoryBadge } from "@/components/badges";
-import { ResponsiveTable } from "@/components/responsive-table";
 import { ResponsesChartCard } from "@/components/responses-chart-card";
-import { FormQuickActions } from "@/components/FormQuickActions";
+import { RecentFormsTable } from "@/components/RecentFormsTable";
 import { Button } from "@/components/ui/button";
 
 export const revalidate = 0; // Admin dashboard: data real-time, tidak di-cache
 
 export default async function DashboardPage() {
-  // U6: semua query independen dijalankan PARALEL (satu round-trip wall-clock
-  // alih-alih 4 berurutan). `countResponsesForForms` tetap setelah `forms`
-  // karena bergantung pada daftar id.
+  // U6: semua query independen dijalankan PARALEL (satu round-trip wall-clock).
+  // `countAllResponsesByForm` tidak bergantung pada daftar form, jadi ikut
+  // batch ini; dulu `countResponsesForForms` harus menunggu `forms` selesai
+  // (serial, +1 round-trip).
   const [
     { data: forms },
     chartData,
     totalResponses,
     monthlyStats,
+    responseCounts,
   ] = await Promise.all([
     // F2-1: data-access layer tunggal — getAllForms() sudah requireAdmin().
     getAllForms(),
@@ -54,6 +54,8 @@ export default async function DashboardPage() {
       count: 0,
       trend: "flat" as const,
     })),
+    // Jumlah respons per form (untuk kartu "Respons" di tabel terbaru).
+    countAllResponsesByForm().catch(() => ({} as Record<string, number>)),
   ]);
 
   // F2-4 + F2-5: statistik memakai computeFormStats (sumber: isFormActive),
@@ -76,13 +78,14 @@ export default async function DashboardPage() {
     })
     .sort((a, b) => daysUntil(a.close_date) - daysUntil(b.close_date));
 
-  // Jumlah respons per form untuk 5 form terbaru (1 query, bukan N+1).
+  // 5 form terbaru (respons count diambil dari query paralel di atas).
   const recentForms = [...forms]
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     .slice(0, 5);
-  const responseCounts = await countResponsesForForms(
-    recentForms.map((f) => f.id),
-  );
+  const recentFormsWithCounts = recentForms.map((form) => ({
+    ...form,
+    responseCount: responseCounts[form.id] ?? 0,
+  }));
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -201,41 +204,7 @@ export default async function DashboardPage() {
             Belum ada formulir. Buat formulir pertamamu.
           </p>
         ) : (
-          <ResponsiveTable
-            caption="Formulir terbaru"
-            columns={[
-              { header: "Formulir" },
-              { header: "Kategori", className: "w-[110px]" },
-              { header: "Status", className: "w-[140px]" },
-              { header: "Respons", className: "w-[90px] text-right" },
-              { header: "Aksi", className: "w-[150px] text-right" },
-            ]}
-            rows={recentForms.map((form) => [
-              <Link
-                key={form.id}
-                href={`/admin/forms/${form.id}`}
-                className="font-semibold text-foreground hover:text-primary hover:underline"
-              >
-                {form.title}
-              </Link>,
-              <CategoryBadge key="cat" value={form.form_type} />,
-              <StatusBadge key="status" form={form} />,
-              <Link
-                key="resp"
-                href={`/admin/forms/${form.id}/responses`}
-                className="font-bold tabular-nums text-foreground hover:text-primary hover:underline"
-              >
-                {responseCounts[form.id] ?? 0}
-              </Link>,
-              <div key="aksi" className="flex justify-end">
-                <FormRowActions
-                  formId={form.id}
-                  isOpen={form.is_open}
-                  responseCount={responseCounts[form.id] ?? 0}
-                />
-              </div>,
-            ])}
-          />
+          <RecentFormsTable forms={recentFormsWithCounts} />
         )}
       </SectionCard>
     </div>
@@ -248,32 +217,4 @@ function describeDaysLeft(closeDate: string): string {
   if (days <= 0) return "ditutup hari ini";
   if (days === 1) return "ditutup besok";
   return `ditutup ${days} hari lagi`;
-}
-
-/**
- * Aksi baris tabel (prompt 3.G): Tutup/Buka, Duplikasi, Hapus.
- *
- * `FormQuickActions` (Fase 4C) dipakai apa adanya — ia sudah memakai server
- * action yang ada (`toggleFormOpenAction`, `duplicateFormAction`,
- * `deleteFormAction`) dengan toast + konfirmasi. Tombol Hapus memakai
- * konfirmasi 2-klik bawaan komponen itu; aturan "form berisi respons tidak
- * boleh di-hard-delete" ditegakkan di server (`deleteForm` melakukan soft
- * delete) — UI menampilkan tooltip yang menjelaskannya.
- */
-function FormRowActions({
-  formId,
-  isOpen,
-  responseCount,
-}: {
-  formId: string;
-  isOpen: boolean;
-  responseCount: number;
-}) {
-  return (
-    <FormQuickActions
-      formId={formId}
-      isOpen={isOpen}
-      responseCount={responseCount}
-    />
-  );
 }

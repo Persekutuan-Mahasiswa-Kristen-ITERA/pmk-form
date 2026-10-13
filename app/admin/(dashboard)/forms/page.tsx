@@ -1,14 +1,12 @@
 import Link from "next/link";
-import { Plus, Trash2, Users, Calendar, Eye } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAllForms, countResponsesForForms, countActiveForms } from "@/lib/forms";
-import { FormQuickActions } from "@/components/FormQuickActions";
+import { AdminFormsList } from "@/components/AdminFormsList";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
-import { StatusBadge, CategoryBadge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import type { Form, FormType } from "@/types/forms";
+import type { FormType } from "@/types/forms";
 
 export const revalidate = 0; // Admin: daftar form real-time, tidak di-cache
 
@@ -18,6 +16,9 @@ export const revalidate = 0; // Admin: daftar form real-time, tidak di-cache
  * Desktop (md+): kartu grid 2-3 kolom.
  * Mobile (<md): daftar baris ringkas (judul + badge + aksi), bukan kartu
  * (kartu terlalu besar di layar kecil, elemen meluber keluar).
+ *
+ * Render list-nya (AdminFormsList) adalah client component supaya aksi cepat
+ * toggle/hapus langsung terlihat (optimistic) tanpa router.refresh().
  */
 export default async function FormsAdminPage({
   searchParams,
@@ -109,146 +110,9 @@ export default async function FormsAdminPage({
           }
         />
       ) : (
-        <>
-          {/* ===== MOBILE: daftar baris ringkas ===== */}
-          <div className="flex flex-col gap-2 md:hidden">
-            {formsWithCounts.map((form) => (
-              <FormListRow key={form.id} form={form} />
-            ))}
-          </div>
-
-          {/* ===== DESKTOP: kartu grid ===== */}
-          <div className="hidden gap-4 md:grid md:grid-cols-2 lg:grid-cols-3">
-            {formsWithCounts.map((form) => (
-              <FormAdminCard key={form.id} form={form} />
-            ))}
-          </div>
-        </>
+        <AdminFormsList forms={formsWithCounts} />
       )}
     </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Mobile: baris ringkas per form                                     */
-/* ------------------------------------------------------------------ */
-function FormListRow({
-  form,
-}: {
-  form: Form & { responseCount: number };
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-white p-3 shadow-sm">
-      {/* Kiri: info utama */}
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <CategoryBadge value={form.form_type} />
-          <StatusBadge form={form} />
-        </div>
-        <h2 className="truncate text-sm font-semibold text-foreground">
-          <Link
-            href={`/admin/forms/${form.id}`}
-            className="hover:text-primary hover:underline"
-          >
-            {form.title}
-          </Link>
-        </h2>
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Users className="h-3 w-3" /> {form.responseCount}
-          </span>
-          <span className="flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
-            {new Date(form.close_date).toLocaleDateString("id-ID", {
-              day: "numeric",
-              month: "short",
-            })}
-          </span>
-        </div>
-      </div>
-
-      {/* Kanan: aksi ringkas */}
-      <div className="flex shrink-0 items-center gap-0.5">
-        <FormQuickActions
-          formId={form.id}
-          isOpen={form.is_open}
-          responseCount={form.responseCount}
-        />
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Desktop: kartu grid                                                */
-/* ------------------------------------------------------------------ */
-function FormAdminCard({
-  form,
-}: {
-  form: Form & { responseCount: number };
-}) {
-  return (
-    <Card className="flex h-full flex-col justify-between overflow-hidden transition-shadow hover:shadow-md">
-      <CardHeader className="space-y-2 p-4 pb-2">
-        <div className="flex flex-wrap items-start gap-2">
-          <CategoryBadge value={form.form_type} />
-          <StatusBadge form={form} />
-        </div>
-        <h2 className="line-clamp-1 text-base font-bold leading-tight text-foreground">
-          <Link
-            href={`/admin/forms/${form.id}`}
-            className="hover:text-primary hover:underline"
-          >
-            {form.title}
-          </Link>
-        </h2>
-        <p className="line-clamp-2 text-xs text-muted-foreground">
-          {form.description || "Tidak ada deskripsi."}
-        </p>
-      </CardHeader>
-
-      <CardContent className="space-y-3 p-4 pt-2">
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <Users className="h-3.5 w-3.5" />
-            {form.responseCount} Respons
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Calendar className="h-3.5 w-3.5" />
-            Tutup:{" "}
-            {new Date(form.close_date).toLocaleDateString("id-ID", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/form/${form.slug}`}
-              target="_blank"
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Eye className="h-3.5 w-3.5" /> Pratinjau
-            </Link>
-            <Link
-              href={`/admin/forms/${form.id}/responses`}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Users className="h-3.5 w-3.5" /> Respons ({form.responseCount})
-            </Link>
-          </div>
-
-          <FormQuickActions
-            formId={form.id}
-            isOpen={form.is_open}
-            responseCount={form.responseCount}
-          />
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
