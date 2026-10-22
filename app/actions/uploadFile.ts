@@ -8,9 +8,9 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 // F2-8: batas panjang nama file (sebelumnya tidak dibatasi). Path Storage
 // maksimal 1024 char; 200 char cukup longgar dan aman.
 const MAX_FILE_NAME_LENGTH = 200;
-// F2-8: rate limit upload untuk menghambat pengisian bucket (kuota abuse).
-// Lebih ketat dari submit (5/menit/IP) karena 1 file = 1 object Storage.
-const UPLOAD_RATE_LIMIT = 5;
+// Batasi spam tanpa menghalangi form yang membutuhkan banyak lampiran.
+// Sisakan ruang untuk retry karena setiap file memakai satu request upload.
+const UPLOAD_RATE_LIMIT = 30;
 const UPLOAD_RATE_WINDOW_MS = 60_000;
 const ALLOWED_FILE_TYPES = new Set([
   "application/pdf",
@@ -76,16 +76,6 @@ function validateFileType(file: File): string | null {
  */
 export async function uploadFormAttachment(formData: FormData) {
   try {
-    // F2-8: rate limit per IP sebelum memproses apapun (menghambat spam upload
-    // yang mengisi kuota bucket). Fase 8-3: rateLimit() async + optional Upstash.
-    const ip = getClientIp(await headers());
-    if (await rateLimit(`upload:${ip}`, UPLOAD_RATE_LIMIT, UPLOAD_RATE_WINDOW_MS)) {
-      return {
-        success: false as const,
-        error: "Terlalu banyak upload. Silakan tunggu beberapa saat.",
-      };
-    }
-
     const file = formData.get("file");
     const formId = formData.get("formId");
     const respondentKey = formData.get("respondentKey") || "anonymous";
@@ -108,6 +98,16 @@ export async function uploadFormAttachment(formData: FormData) {
     const typeError = validateFileType(file);
     if (typeError) {
       throw new Error(typeError);
+    }
+
+    // Hitung hanya upload yang lolos validasi agar file invalid tidak
+    // menghabiskan kuota. Satu file tetap dihitung sebagai satu upload.
+    const ip = getClientIp(await headers());
+    if (await rateLimit(`upload:${ip}`, UPLOAD_RATE_LIMIT, UPLOAD_RATE_WINDOW_MS)) {
+      return {
+        success: false as const,
+        error: "Terlalu banyak upload. Silakan tunggu beberapa saat.",
+      };
     }
 
     const safeRespondentKey = String(respondentKey)
