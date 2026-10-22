@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { MAX_FILE_UPLOAD_FIELDS } from "@/lib/file-upload-limits";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Form,
@@ -246,6 +247,10 @@ export async function createForm(
   payload: Omit<Form, "id" | "created_at" | "updated_at">
 ): Promise<Form> {
   await requireAdmin();
+  const uploadCount = (payload.form_fields ?? []).filter((field) => field.type === "file_upload").length;
+  if (uploadCount > MAX_FILE_UPLOAD_FIELDS) {
+    throw new Error(`Maksimal ${MAX_FILE_UPLOAD_FIELDS} field upload per form.`);
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
@@ -263,6 +268,10 @@ export async function updateForm(
   payload: Partial<Omit<Form, "id" | "created_at">>
 ): Promise<Form> {
   await requireAdmin();
+  const uploadCount = (payload.form_fields ?? []).filter((field) => field.type === "file_upload").length;
+  if (uploadCount > MAX_FILE_UPLOAD_FIELDS) {
+    throw new Error(`Maksimal ${MAX_FILE_UPLOAD_FIELDS} field upload per form.`);
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")

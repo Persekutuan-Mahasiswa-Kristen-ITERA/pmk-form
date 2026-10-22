@@ -5,7 +5,7 @@
 -- TUJUAN: membatasi upload di level bucket sehingga meski ada client yang
 -- mem-bypass server action (upload langsung ke Storage pakai anon key), tetap
 -- ditolak oleh server Storage:
---   - file_size_limit  = 10 MB (sama dengan MAX_FILE_SIZE di server action)
+--   - file_size_limit  = 512 KB (sama dengan MAX_FILE_SIZE di server action)
 --   - allowed_mime_types = whitelist yang sama dengan ALLOWED_FILE_TYPES
 --     (PDF, JPG, PNG, DOC, DOCX)
 --
@@ -22,7 +22,7 @@
 
 update storage.buckets
 set
-  file_size_limit = 10485760, -- 10 * 1024 * 1024 bytes
+  file_size_limit = 524288, -- 512 * 1024 bytes
   allowed_mime_types = array[
     'application/pdf',
     'image/jpeg',

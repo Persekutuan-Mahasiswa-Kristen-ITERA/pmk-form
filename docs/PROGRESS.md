@@ -785,7 +785,7 @@ terpenting untuk mobile")
   hanya bidang wajib agar persentase stabil, `aria-live` untuk pembaca layar.
 - **Scroll ke error pertama** + `focus()` saat submit gagal validasi
   (`form.handleSubmit(onSubmit, onInvalid)`).
-- **Upload file**: validasi ukuran client-side (10 MB), status eksplisit
+- **Upload file**: validasi ukuran client-side (512 KB), status eksplisit
   (`Mengunggah…` / `berhasil diunggah` / `gagal diunggah…`), petunjuk
   tipe/ukuran di bawah field.
 - **Toast** (bukan `alert()`) untuk error submit/rate limit; tombol submit

@@ -34,7 +34,7 @@ Jalankan script SQL di **Supabase SQL Editor**:
 ## 3. Storage Bucket Setup
 
 Script migrasi `001_generic_forms_migration.sql` sudah otomatis membuat bucket berikut:
-- **`form-attachments`** (Public): Menyimpan seluruh lampiran file dari form generik (PDF, JPG, PNG, DOC, DOCX, maks 10MB).
+- **`form-attachments`** (Public): Menyimpan seluruh lampiran file dari form generik (PDF, JPG, PNG, DOC, DOCX, maks 512KB).
 - **`recruitment-files`** (Public): Mempertahankan bucket lama untuk oprec yang sedang berjalan.
 
 ---

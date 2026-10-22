@@ -236,6 +236,8 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
     if (!title.trim()) { toast({ title: "Error", description: "Judul form wajib diisi.", variant: "destructive" }); return; }
     if (!slug.trim()) { toast({ title: "Error", description: "Slug wajib diisi.", variant: "destructive" }); return; }
     if (fields.length === 0) { toast({ title: "Error", description: "Tambahkan setidaknya 1 field pertanyaan.", variant: "destructive" }); return; }
+    const fileUploadCount = fields.filter((field) => field.type === "file_upload").length;
+    if (fileUploadCount > 10) { toast({ title: "Error", description: "Maksimal 10 field upload per form.", variant: "destructive" }); return; }
     setIsSaving(true);
     try {
       const payload = { title, description: description || null, slug, form_type: formType, is_open: isOpen, open_date: new Date(openDate).toISOString(), close_date: new Date(closeDate).toISOString(), form_fields: fields, settings, created_by: null };

@@ -19,7 +19,7 @@ Dokumen ini berisi dokumentasi teknis, arsitektur, skema database, rute aplikasi
 | **Tabel Form Utama** | `public.recruitments` | `public.forms` (memiliki kolom `form_type` & `settings` JSONB) | **[BARU]** |
 | **Tabel Respons** | `public.submissions` | `public.form_responses` (semua identitas disimpan di `answers` JSONB) | **[BARU]** |
 | **Penyimpanan Identitas** | Kolom terpisah (`applicant_nim`, dll) | Generik di dalam `answers` JSONB (mendukung anonim / tanpa NIM) | **[TERUBAH]** |
-| **Storage Bucket** | `recruitment-files` (PDF saja) | `form-attachments` (PDF, JPG, PNG, DOC, DOCX maks 10MB) | **[BARU]** |
+| **Storage Bucket** | `recruitment-files` (PDF saja) | `form-attachments` (PDF, JPG, PNG, DOC, DOCX maks 512KB) | **[BARU]** |
 | **Form Builder Admin** | `RecruitmentBuilder.tsx` | `GenericFormBuilder.tsx` (7 tipe field, drag-drop, tab settings) | **[BARU]** |
 | **Dashboard Admin** | `/admin/recruitments` | `/admin/forms` (filter jenis form, statistik, & respons viewer) | **[BARU]** |
 | **Landing Page Publik** | Hero tetap dan kartu khusus `RecruitmentCard` dari tabel `recruitments` | Hero diperbarui, filter kategori, quick action Cek Hasil & Masuk Admin, serta kartu generik lintas jenis form dari tabel `forms` | **[TERUBAH]** |

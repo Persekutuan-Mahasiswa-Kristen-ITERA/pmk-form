@@ -3,8 +3,9 @@
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { MAX_FILE_SIZE_BYTES } from "@/lib/file-upload-limits";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = MAX_FILE_SIZE_BYTES; // 512 KB
 // F2-8: batas panjang nama file (sebelumnya tidak dibatasi). Path Storage
 // maksimal 1024 char; 200 char cukup longgar dan aman.
 const MAX_FILE_NAME_LENGTH = 200;
@@ -92,7 +93,7 @@ export async function uploadFormAttachment(formData: FormData) {
 
     // Fase 8-2: validasi MIME-to-extension consistency + reject extensionless
     if (file.size > MAX_FILE_SIZE) {
-      throw new Error("Ukuran file terlalu besar. Maksimum 10 MB.");
+      throw new Error("Ukuran file terlalu besar. Maksimum 512 KB.");
     }
 
     const typeError = validateFileType(file);

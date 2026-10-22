@@ -35,9 +35,9 @@ import Image from "next/image";
 import { PMK_LOGO_URL } from "@/components/PMKLogo";
 import { useToast } from "@/hooks/use-toast";
 import type { Form as GenericForm, FieldConfig, FieldOption } from "@/types/forms";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_KB, MAX_FILE_UPLOAD_FIELDS } from "@/lib/file-upload-limits";
 
-const MAX_FILE_MB = 10;
-const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
+const MAX_FILE_BYTES = MAX_FILE_SIZE_BYTES;
 
 // Normalize generic FieldConfig -> renderer FieldConfig
 function toRendererConfig(f: FieldConfig): import("./FormFieldRenderer").FieldConfig {
@@ -99,7 +99,7 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
     if (field.type === "file_upload") {
       let validator = z.custom<File>();
       validator = validator.refine((file) => !file || file.size <= MAX_FILE_BYTES, {
-        message: `Ukuran file maksimal ${MAX_FILE_MB} MB`,
+        message: `Ukuran file maksimal ${MAX_FILE_SIZE_KB} KB`,
       });
       schemaShape[field.id] = field.required
         ? validator.refine((file) => !!file, { message: `${field.label} wajib diupload.` })
@@ -180,6 +180,10 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
     setIsSubmitting(true);
     try {
       const answers: Record<string, unknown> = {};
+      const fileUploadFields = fields.filter((field) => field.type === "file_upload");
+      if (fileUploadFields.length > MAX_FILE_UPLOAD_FIELDS) {
+        throw new Error(`Form ini memiliki terlalu banyak field upload. Maksimal ${MAX_FILE_UPLOAD_FIELDS} file.`);
+      }
 
       // Use a stable key for file path; try common identity fields
       const respondentKeyRaw =
@@ -195,7 +199,7 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
           // Validasi client-side tambahan sebelum upload (prompt U3).
           if (raw.size > MAX_FILE_BYTES) {
             setUploadStates((s) => ({ ...s, [field.id]: "error" }));
-            throw new Error(`${field.label}: ukuran melebihi ${MAX_FILE_MB} MB`);
+            throw new Error(`${field.label}: ukuran melebihi ${MAX_FILE_SIZE_KB} KB`);
           }
           setUploadStates((s) => ({ ...s, [field.id]: "uploading" }));
           const fd = new FormData();
@@ -327,7 +331,7 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
                     ) : null}
                     {rf.type === "file_upload" ? (
                       <p className="text-xs text-muted-foreground">
-                        Maksimal {MAX_FILE_MB} MB. Format umum saja (PDF, JPG, PNG, DOCX).
+                        Maksimal {MAX_FILE_SIZE_KB} KB. Format umum saja (PDF, JPG, PNG, DOCX).
                       </p>
                     ) : null}
                   </div>

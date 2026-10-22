@@ -81,7 +81,7 @@ const objectPath = `${formId}/${safeRespondentKey}/${Date.now()}-${safeFileName}
 if (!ALLOWED_FILE_TYPES.has(file.type)) { throw ... }   // MIME whitelist
 const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
 if (!ALLOWED_EXTENSIONS.has(extension)) { throw ... }     // ekstensi whitelist
-if (file.size > MAX_FILE_SIZE) { throw ... }              // 10 MB
+if (file.size > MAX_FILE_SIZE) { throw ... }              // 512 KB
 ```
 Semua cek di atas ada di dalam `"use server"` — client tidak bisa melewati
 validasi ini karena bukan kode browser.
@@ -90,7 +90,7 @@ validasi ini karena bukan kode browser.
 infrastruktur Storage, di luar aplikasi):
 ```sql
 update storage.buckets set
-  file_size_limit    = 10485760,
+  file_size_limit    = 524288,
   allowed_mime_types = array['application/pdf', 'image/jpeg', ...]
 where id = 'form-attachments';
 ```

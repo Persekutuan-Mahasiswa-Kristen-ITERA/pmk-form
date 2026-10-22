@@ -11,6 +11,7 @@ import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { revalidateFormAdminData } from "@/app/actions/revalidate";
 import type { FormSettings } from "@/types/forms";
+import { MAX_FILE_UPLOAD_FIELDS } from "@/lib/file-upload-limits";
 
 const SubmitInputSchema = z.object({
   formId: z.string().uuid(),
@@ -146,6 +147,10 @@ export async function submitFormResponseAction(input: {
     // supaya field identitas otomatis divalidasi server-side dan tidak bisa
     // dilewati dengan memodifikasi payload client.
     const fields = resolveFormFields({ form_fields: form.form_fields, settings: form.settings });
+    const fileUploadCount = fields.filter((field) => field.type === "file_upload").length;
+    if (fileUploadCount > MAX_FILE_UPLOAD_FIELDS) {
+      return { success: false as const, error: `Form ini memiliki terlalu banyak field upload. Maksimal ${MAX_FILE_UPLOAD_FIELDS} file.` };
+    }
     const settings = (form.settings ?? {}) as FormSettings;
 
     // Fase 7-2: verifikasi Turnstile. Hanya bila fitur dikonfigurasi global
