@@ -49,3 +49,5 @@ scripts/migrate/.env.migrate
 # local Supabase CLI state
 supabase/.temp/
 supabase/.branches/
+# local notes (site URLs)
+.env.site
