@@ -19,7 +19,8 @@ export function buildFormSchema(fields: FieldConfig[]) {
   for (const field of fields) {
     switch (field.type) {
       case "file_upload":
-        // Files reach the server as already-uploaded public URL strings.
+        // Files reach the server as R2 object keys from uploadFormAttachment; submitResponse checks
+        // that each key belongs to the form (lib/attachments.ts).
         shape[field.id] = field.required
           ? z.string().min(1, `${field.label} wajib diupload.`)
           : z.string().nullish();

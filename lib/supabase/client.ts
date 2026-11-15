@@ -16,5 +16,6 @@ export function createClient() {
         )
     }
 
-    return createBrowserClient(url, anonKey)
+    // pmk-form tables live in schema `form` of the PI-CORE project.
+    return createBrowserClient(url, anonKey, { db: { schema: 'form' } })
 }

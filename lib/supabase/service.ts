@@ -23,6 +23,8 @@ export function createServiceClient() {
   }
 
   return createClient(url, key, {
+    // pmk-form tables live in schema `form` of the PI-CORE project.
+    db: { schema: "form" },
     auth: {
       persistSession: false,
       autoRefreshToken: false,

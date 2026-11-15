@@ -81,7 +81,11 @@ export async function inviteAdminAction(input: { email: string; role?: string })
 
   await audit("invite", { role }, email);
   revalidatePath("/admin/users");
-  return { success: true as const };
+
+  // The invite only works for someone with a PI-CORE login under this exact email. Warn, do not block:
+  // the PI-CORE admin may create the account later.
+  const { data: hasAccount } = await supabase.rpc("picore_account_exists", { p_email: email });
+  return { success: true as const, hasPicoreAccount: hasAccount === true };
 }
 
 /** Ubah role admin. */

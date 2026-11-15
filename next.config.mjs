@@ -1,5 +1,15 @@
 import bundleAnalyzer from '@next/bundle-analyzer';
 
+// Browser talks to Supabase directly (login). Allow exactly the configured project origin
+// (also a local stack in development), next to the hosted *.supabase.co pattern.
+const supabaseOrigin = (() => {
+    try {
+        return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || '').origin
+    } catch {
+        return ''
+    }
+})()
+
 const withBundleAnalyzer = bundleAnalyzer({
     enabled: process.env.ANALYZE === 'true',
 })
@@ -83,17 +93,18 @@ const nextConfig = {
                     // Content-Security-Policy: restrict semua sumber daya.
                     // - 'self' untuk aset first-party
                     // - 'unsafe-inline' HANYA untuk style (Tailwind runtime di client) + script (Next.js inline)
-                    // - Cloudflare Turnstile & Google OAuth sebagai exception eksplisit
+                    // - Cloudflare Turnstile sebagai exception eksplisit (login Google sudah tidak ada:
+                    //   admin masuk dengan akun PI-CORE)
                     {
                         key: 'Content-Security-Policy',
                         value:
                             "default-src 'self'; " +
-                            "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://accounts.google.com https://www.googletagmanager.com; " +
+                            "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://www.googletagmanager.com; " +
                             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
                             "img-src 'self' data: https:; " +
                             "font-src 'self' data: https://fonts.gstatic.com; " +
-                            "connect-src 'self' https://*.supabase.co https://challenges.cloudflare.com https://accounts.google.com https://sheets.googleapis.com; " +
-                            "frame-src https://challenges.cloudflare.com https://accounts.google.com; " +
+                            `connect-src 'self' ${supabaseOrigin} https://*.supabase.co https://challenges.cloudflare.com https://sheets.googleapis.com; ` +
+                            "frame-src https://challenges.cloudflare.com; " +
                             "frame-ancestors 'none'; " +
                             "base-uri 'self'; " +
                             "form-action 'self';",
