@@ -62,8 +62,14 @@ export function rewriteResponse(response, fileFieldIds, keyFor) {
     if (!moves.has(oldPath)) moves.set(oldPath, keyFor(oldPath));
     return moves.get(oldPath);
   };
+  // Old oprec rows key answers by field LABEL, newer ones by field id, so rewrite every answer that is
+  // an old attachment URL whatever its key (fileFieldIds is kept for callers; values decide).
   const answers = { ...(response.answers || {}) };
-  for (const id of fileFieldIds) if (id in answers) answers[id] = map(answers[id]);
+  for (const key of Object.keys(answers)) {
+    const v = answers[key];
+    answers[key] = Array.isArray(v) ? v.map(map) : map(v);
+  }
+  void fileFieldIds;
   const files = (Array.isArray(response.files) ? response.files : []).map(map);
   return { answers, files, moves: [...moves].map(([oldPath, newKey]) => ({ oldPath, newKey })) };
 }

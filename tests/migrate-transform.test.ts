@@ -29,6 +29,17 @@ test("odd paths go under migrated/ and still validate", () => {
   assert.equal(isAttachmentKeyForForm(key, FORM), true);
 });
 
+test("answers keyed by label (old oprec rows) are rewritten too", () => {
+  const out = rewriteResponse(
+    { answers: { "Nama Lengkap": "Yoel", "Upload CV": OLD }, files: [OLD] },
+    [],
+    (p: string) => newKeyForOldPath(p, FORM, "0000abcd")
+  );
+  assert.equal(out.answers["Nama Lengkap"], "Yoel");
+  assert.equal(out.answers["Upload CV"], out.files[0]);
+  assert.equal(isAttachmentKeyForForm(out.answers["Upload CV"], FORM), true);
+});
+
 test("response rewrite: answers and files agree, other answers untouched", () => {
   let n = 0;
   const out = rewriteResponse(
