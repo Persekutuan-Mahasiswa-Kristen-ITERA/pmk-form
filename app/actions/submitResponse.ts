@@ -4,6 +4,7 @@ import { z } from "zod";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { isAttachmentKeyForForm } from "@/lib/attachments";
 import { checkDuplicateResponse, isFormActive, resolveFormFields, normalizeNim } from "@/lib/forms";
 import { syncOne } from "@/lib/sheets/sync";
 import { buildFormSchema } from "@/lib/form-schema";
@@ -222,12 +223,18 @@ export async function submitFormResponseAction(input: {
       }
     }
 
-    // 5. Collect attachment URLs from file_upload fields.
+    // 5. Collect attachment keys from file_upload fields. Each value must be an R2 key returned by
+    //    uploadFormAttachment for THIS form (lib/attachments.ts); anything else (a URL, another
+    //    form's key, a made-up path) is rejected so a response can never point outside its form.
     const files: string[] = [];
     for (const field of fields) {
       if (field.type === "file_upload") {
         const value = validated.data[field.id];
-        if (typeof value === "string" && value.trim() !== "") files.push(value);
+        if (value === null || value === undefined || value === "") continue;
+        if (!isAttachmentKeyForForm(value, formId)) {
+          return { success: false as const, error: `${field.label}: lampiran tidak valid. Silakan upload ulang.` };
+        }
+        files.push(value);
       }
     }
 

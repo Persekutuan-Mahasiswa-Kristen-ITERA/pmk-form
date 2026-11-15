@@ -21,6 +21,8 @@ export async function createClient() {
     const cookieStore = await cookies()
 
     return createServerClient(url, anonKey, {
+        // pmk-form tables live in schema `form` of the PI-CORE project.
+        db: { schema: "form" },
         cookies: {
             getAll() {
                 return cookieStore.getAll()

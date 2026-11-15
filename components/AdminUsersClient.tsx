@@ -40,11 +40,14 @@ export function AdminUsersClient({
     if (!email.trim()) return;
     startTransition(async () => {
       const res = await inviteAdminAction({ email, role: "super_admin" });
+      const invited = email.trim().toLowerCase();
       toast({
         title: res.success ? "Berhasil" : "Gagal",
-        description: res.success
-          ? `${email.trim().toLowerCase()} diundang. Akan aktif saat login Google pertama.`
-          : res.error,
+        description: !res.success
+          ? res.error
+          : res.hasPicoreAccount
+            ? `${invited} diundang. Akan aktif saat orangnya masuk dengan akun PI-CORE.`
+            : `${invited} diundang, tapi belum ada akun PI-CORE aktif dengan email ini. Minta admin PI-CORE membuatkan akunnya dulu.`,
         variant: res.success ? "default" : "destructive",
       });
       if (res.success) setEmail("");
@@ -108,15 +111,15 @@ export function AdminUsersClient({
             <UserPlus className="w-5 h-5" /> Undang Admin Baru
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Masukkan email akun Google departemen. Status <Badge className="text-[10px]">invited</Badge> akan
-            menjadi <Badge className="text-[10px]">active</Badge> saat login Google pertama kali.
+            Masukkan email akun PI-CORE orang yang diundang. Status <Badge className="text-[10px]">invited</Badge> akan
+            menjadi <Badge className="text-[10px]">active</Badge> saat ia pertama kali masuk dengan akun PI-CORE.
           </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleInvite} className="flex flex-col sm:flex-row gap-3">
             <Input
               type="email"
-              placeholder="departemen@pmkitera.com"
+              placeholder="email akun PI-CORE"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required

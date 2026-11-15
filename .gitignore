@@ -40,3 +40,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# pmk-form -> PI-CORE move (contain paths / secrets)
+migrate-report.json
+legacy-tables.sql
+scripts/migrate/.env.migrate
+*.dump
+# local Supabase CLI state
+supabase/.temp/
+supabase/.branches/

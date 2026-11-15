@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server'
  * Proxy (middleware) — gerbang awal rute admin.
  *
  * Catatan penting soal desain ini:
- * - Matcher sudah dipersempit ke /admin/* dan /auth/callback. Halaman publik
+ * - Matcher sudah dipersempit ke /admin/*. Halaman publik
  *   (/, /form/*) dan semua aset statis TIDAK melalui proxy, jadi tidak ada
  *   pemeriksaan auth untuk mereka.
  * - Gating rute memakai auth.getClaims() (tersedia @supabase/supabase-js >=
@@ -91,10 +91,9 @@ function withCookies(target: NextResponse, source: NextResponse): NextResponse {
 
 export const config = {
     matcher: [
-        // Rute yang butuh cek session: area admin dan callback OAuth.
+        // Rute yang butuh cek session: area admin (login memakai akun PI-CORE).
         // Aset statis, halaman publik, dan endpoint publik lain tidak
         // melalui proxy sama sekali.
         '/admin/:path*',
-        '/auth/callback',
     ],
 }

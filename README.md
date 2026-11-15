@@ -5,7 +5,7 @@ Sistem Manajemen Form Serbaguna untuk seluruh divisi & kepanitiaan **PMK ITERA**
 ## 🚀 Fitur Utama
 - **Multi-Jenis Form**: Mendukung `recruitment`, `event`, `survey`, `presensi`, dan `general`.
 - **Form Builder Dinamis**: Drag-and-drop urutan pertanyaan dengan pilihan tipe field lengkap (Teks Pendek, Teks Panjang, Dropdown, Radio, Checkbox Group, Tanggal, dan Upload Lampiran).
-- **Public Renderer Generik**: Halaman pengisian form responsif di `/form/[slug]` dengan validasi Zod dinamis & upload file ke bucket Supabase.
+- **Public Renderer Generik**: Halaman pengisian form responsif di `/form/[slug]` dengan validasi Zod dinamis & upload file ke bucket R2 privat.
 - **Manajemen Respons & Export**: Tabel viewer per-form, export data ke **CSV** (PapaParse), dan export seluruh lampiran ke **ZIP** (JSZip).
 - **Kompatibilitas Penuh**: Data oprec lama (`submissions`, `selection_results`) tetap utuh dan terlayani cek-hasil. Route lama `/recruitment/[slug]` dan `/admin/recruitments` sudah tidak ada — renderer generik `/form/[slug]` adalah satu-satunya jalur publik.
 
@@ -13,7 +13,8 @@ Sistem Manajemen Form Serbaguna untuk seluruh divisi & kepanitiaan **PMK ITERA**
 
 ## 🛠️ Stack Teknologi
 - **Frontend**: Next.js 16 (App Router + Turbopack), React 18, TypeScript, Tailwind CSS, shadcn/ui
-- **Backend & Database**: Supabase (PostgreSQL + Auth + Storage)
+- **Backend & Database**: project Supabase **PI-CORE** (schema `form`, login = akun PI-CORE) — lihat [supabase/README.md](./supabase/README.md)
+- **Lampiran**: Cloudflare R2 (bucket privat, dibuka admin lewat `/admin/attachments`)
 - **Library Pendukung**: `@dnd-kit` (drag-and-drop), `react-hook-form` + `zod` (validasi), `papaparse` (CSV), `jszip` + `file-saver` (ZIP), `lucide-react` (ikon)
 
 ---

@@ -208,12 +208,12 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
           fd.append("respondentKey", String(respondentKeyRaw));
 
           const result = await uploadFormAttachment(fd);
-          if (!result.success || !result.url) {
+          if (!result.success || !result.key) {
             setUploadStates((s) => ({ ...s, [field.id]: "error" }));
             throw new Error(result.error || `Gagal mengupload ${field.label}`);
           }
           setUploadStates((s) => ({ ...s, [field.id]: "done" }));
-          answers[field.id] = result.url;
+          answers[field.id] = result.key;
         } else {
           answers[field.id] = raw ?? null;
         }

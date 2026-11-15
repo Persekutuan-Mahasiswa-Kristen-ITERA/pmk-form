@@ -31,6 +31,7 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import JSZip from "jszip";
+import { ATTACHMENT_KEY_RE, attachmentFileName, attachmentPath, isAttachmentKey } from "@/lib/attachments";
 import saveAs from "file-saver";
 import { deleteFormResponseAction } from "@/app/actions/deleteResponse";
 import { StatusCell } from "./StatusCell";
@@ -55,6 +56,16 @@ function resolveAnswer(res: FormResponse, field: FieldConfig): FieldValue {
   const answers = res.answers ?? {};
   const value = field.id in answers ? answers[field.id] : answers[field.label];
   return (value as FieldValue) ?? null;
+}
+
+
+/** Admin link for a stored attachment (R2 key); older rows may still hold a full URL. */
+function attachmentHref(value: string, download = false): string {
+  return ATTACHMENT_KEY_RE.test(value) ? attachmentPath(value, download) : value;
+}
+
+function attachmentLabel(value: string): string {
+  return ATTACHMENT_KEY_RE.test(value) ? attachmentFileName(value) : value.split("/").pop()?.split("?")[0] || value;
 }
 
 export function GenericResponseTable({
@@ -114,7 +125,10 @@ export function GenericResponseTable({
 
         fields.forEach((f) => {
           const val = resolveAnswer(res, f);
-          rowData[f.label] = Array.isArray(val) ? val.join(", ") : val || "";
+          rowData[f.label] =
+            f.type === "file_upload" && isAttachmentKey(val)
+              ? `${window.location.origin}${attachmentPath(val)}`
+              : Array.isArray(val) ? val.join(", ") : val || "";
         });
 
         // Fase 7-3: sertakan status di export CSV.
@@ -124,7 +138,9 @@ export function GenericResponseTable({
             : RESPONSE_STATUS_LABELS[res.status];
 
         if (res.files && res.files.length > 0) {
-          rowData["Lampiran"] = res.files.join(" ; ");
+          rowData["Lampiran"] = res.files
+            .map((f) => (isAttachmentKey(f) ? `${window.location.origin}${attachmentPath(f)}` : f))
+            .join(" ; ");
         }
 
         return rowData;
@@ -175,14 +191,15 @@ export function GenericResponseTable({
         const subFolder = folder.folder(respondentName);
         if (!subFolder) continue;
 
-        for (const fileUrl of res.files) {
+        for (const file of res.files) {
           try {
-            const response = await fetch(fileUrl);
+            // Same-origin admin route (private R2 bucket); the session cookie goes along.
+            const response = await fetch(attachmentHref(file, true));
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const blob = await response.blob();
-            const fileName = fileUrl.split("/").pop()?.split("?")[0] || "lampiran.pdf";
-            subFolder.file(fileName, blob);
+            subFolder.file(attachmentLabel(file) || "lampiran", blob);
           } catch (e) {
-            console.error("Gagal mendownload file:", fileUrl, e);
+            console.error("Gagal mendownload file:", file, e);
           }
           downloadedCount++;
           setZipProgress(Math.round((downloadedCount / totalFiles) * 100));
@@ -281,7 +298,10 @@ export function GenericResponseTable({
                         </TableCell>
                         {fields.slice(0, 3).map((f) => {
                           const val = resolveAnswer(res, f);
-                          const displayVal = Array.isArray(val) ? val.join(", ") : String(val || "-");
+                          const displayVal =
+                            f.type === "file_upload" && typeof val === "string" && val
+                              ? attachmentLabel(val)
+                              : Array.isArray(val) ? val.join(", ") : String(val || "-");
                           return (
                             <TableCell key={f.id} className="max-w-[200px] truncate">
                               {displayVal}
@@ -343,7 +363,10 @@ export function GenericResponseTable({
               <div className="border rounded-xl p-4 space-y-3 bg-secondary/20">
                 {fields.map((f) => {
                   const val = resolveAnswer(selectedResponse, f);
-                  const displayVal = Array.isArray(val) ? val.join(", ") : val || "-";
+                  const displayVal =
+                    f.type === "file_upload" && typeof val === "string" && val
+                      ? attachmentLabel(val)
+                      : Array.isArray(val) ? val.join(", ") : val || "-";
                   return (
                     <div key={f.id} className="text-sm">
                       <span className="font-semibold text-muted-foreground block text-xs">{f.label}</span>
@@ -357,15 +380,15 @@ export function GenericResponseTable({
                 <div className="space-y-2">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lampiran File</h4>
                   <div className="flex flex-col gap-2">
-                    {selectedResponse.files.map((fileUrl, i) => (
+                    {selectedResponse.files.map((file, i) => (
                       <a
                         key={i}
-                        href={fileUrl}
+                        href={attachmentHref(file)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-primary underline truncate block bg-primary/5 p-2 rounded-lg border border-primary/20 hover:bg-primary/10"
                       >
-                        {fileUrl}
+                        {attachmentLabel(file)}
                       </a>
                     ))}
                   </div>

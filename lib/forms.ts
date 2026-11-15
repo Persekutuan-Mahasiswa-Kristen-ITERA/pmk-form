@@ -593,7 +593,8 @@ export async function checkDuplicateResponse(
   formId: string,
   fieldId: string,
   value: string,
-  client?: SupabaseClient
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client?: SupabaseClient<any, "public", "form">
 ): Promise<boolean> {
   const supabase = client ?? (await createClient());
   const { count, error } = await supabase

@@ -5,6 +5,8 @@
  * Google API, sehingga bisa diuji unit langsung tanpa mock.
  */
 
+import { attachmentUrl, isAttachmentKey } from "@/lib/attachments";
+
 /**
  * Base REST Sheets API v4. Ditaruh di sini (bukan client.ts) supaya bisa
  * diuji regresi tanpa menyentuh "server-only".
@@ -42,12 +44,14 @@ export function flattenAnswer(value: unknown): string {
  * Kolom terakhir SELALU `__response_id` untuk idempotensi.
  */
 export function buildRow(
-  fields: { id: string; label: string }[],
+  fields: { id: string; label: string; type?: string }[],
   answers: Record<string, unknown>,
   responseId: string
 ): string[] {
   const row = fields.map((f) => {
     const value = f.id in answers ? answers[f.id] : answers[f.label];
+    // Files sit in a private bucket: the sheet gets the admin link, which asks for login.
+    if (f.type === "file_upload" && isAttachmentKey(value)) return attachmentUrl(value);
     return flattenAnswer(value);
   });
   row.push(responseId);

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
  * Admin identity derived from the current request session.
  *
  * Authorization model (Fase 5): a user is an admin if and only if they have
- * an ACTIVE row in `public.admin_members` (email allowlist, invite-only).
+ * an ACTIVE row in `form.admin_members` (email allowlist, invite-only).
  * This is DEFAULT-DENY — an authenticated user with no allowlist row (or a
  * DISABLED row) has no admin access at all.
  *
@@ -14,9 +14,9 @@ import { createClient } from "@/lib/supabase/server";
  * dibaca di sini.
  *
  * Penautan `user_id` saat login pertama dilakukan oleh fungsi DB
- * `link_admin_user_id()` (SECURITY DEFINER, tanpa parameter — lihat
- * migration 009 LANGKAH 5), dipanggil dari /auth/callback. Aplikasi TIDAK
- * pernah menulis user_id dari payload client.
+ * `form.link_admin_user_id()` (SECURITY DEFINER, tanpa parameter), dipanggil
+ * dari getAdminAccess(). Aplikasi TIDAK pernah menulis user_id dari payload
+ * client. Login memakai akun PI-CORE (project Supabase yang sama).
  *
  * Per-division scoping (divisi_admin) sengaja TIDAK dienforce (keputusan
  * Fase 4A + Checkpoint 5.0 #7: satu level admin). Kolom `role` disimpan
@@ -35,51 +35,80 @@ export interface AdminUser {
   status: string;
 }
 
+/** Why a signed-in person is not let into the admin area (shown on the 403 screen). */
+export type AdminDenial =
+  | "not_signed_in"
+  | "no_member" // a login without a PI-CORE member row
+  | "inactive" // PI-CORE member deactivated
+  | "must_change_password" // still on PI-CORE's temporary password
+  | "not_admin"; // no active form.admin_members row
+
+export type AdminAccess = { admin: AdminUser; denial: null } | { admin: null; denial: AdminDenial };
+
 /**
- * Resolve the admin identity for the current request.
- * Returns `null` when the request is unauthenticated OR the authenticated user
- * has no ACTIVE `admin_members` row. Callers that must distinguish those two
- * cases can check the raw session first.
+ * Resolve admin access for the current request.
  *
- * FASE 2: dibungkus React `cache()`. Di App Router `cache()` bersifat
- * REQUEST-SCOPED (tidak module-scoped), jadi hasilnya hanya di-share di dalam
- * satu request yang sama dan TIDAK menyebarkan identitas antar request yang
- * berbeda. Efeknya: beberapa panggilan `requireAdmin()` dalam satu request
- * (render server component + server action, mis. layout admin + halaman)
- * hanya melakukan SATU round-trip `auth.getUser()` + query `admin_members`.
+ * Login is PI-CORE's Supabase Auth (same project, schema `form` for pmk-form). Order:
+ *   1. a session must exist;
+ *   2. the caller's PI-CORE member row must exist, be active, and not be on a temporary password
+ *      (form.my_picore_status() reports on the caller only);
+ *   3. an ACTIVE form.admin_members row linked to this account. An invite (user_id still NULL) is
+ *      linked here by form.link_admin_user_id(), which matches the account's VERIFIED email; the app
+ *      never chooses which row gets linked.
+ * RLS (form.is_admin()) enforces the same rules again in the database.
  *
- * Semantik default-deny TIDAK berubah: `cache()` hanya mengingat hasil
- * (termasuk `null`), jadi user tanpa baris aktif tetap ditolak di setiap cek.
+ * Wrapped in React cache(): request-scoped, so several checks in one request cost one round trip.
  */
-export const getAdminUser = cache(async (): Promise<AdminUser | null> => {
+export const getAdminAccess = cache(async (): Promise<AdminAccess> => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) return { admin: null, denial: "not_signed_in" };
 
-  if (!user) return null;
+  const { data: status } = await supabase.rpc("my_picore_status").maybeSingle<{
+    has_member: boolean;
+    is_active: boolean;
+    must_change_password: boolean;
+  }>();
+  if (!status?.has_member) return { admin: null, denial: "no_member" };
+  if (!status.is_active) return { admin: null, denial: "inactive" };
+  if (status.must_change_password) return { admin: null, denial: "must_change_password" };
 
-  const { data: member, error } = await supabase
-    .from("admin_members")
-    .select("id, email, role, status, user_id")
-    .eq("user_id", user.id)
-    .single();
+  const loadMember = () =>
+    supabase
+      .from("admin_members")
+      .select("id, email, role, status, user_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  // No allowlist row (PGRST116) or any other failure = not an admin. Fail closed.
-  if (error || !member) return null;
+  let { data: member } = await loadMember();
+  if (!member) {
+    // First login after an invite: link by verified email, then read again.
+    await supabase.rpc("link_admin_user_id");
+    ({ data: member } = await loadMember());
+  }
 
-  // Double-check status di level aplikasi juga (defense-in-depth bersama RLS):
-  // baris 'invited'/'disabled' bukan admin aktif.
-  if (member.status !== "active") return null;
+  // Fail closed: no row, or an 'invited'/'disabled' row, is not an admin.
+  if (!member || member.status !== "active") return { admin: null, denial: "not_admin" };
 
   return {
-    id: user.id,
-    email: user.email,
-    role: member.role,
-    memberEmail: member.email,
-    status: member.status,
+    admin: {
+      id: user.id,
+      email: user.email,
+      role: member.role,
+      memberEmail: member.email,
+      status: member.status,
+    },
+    denial: null,
   };
 });
+
+/**
+ * Resolve the admin identity for the current request, or `null` when the caller is not an
+ * active admin for any reason (see getAdminAccess for the reason).
+ */
+export const getAdminUser = cache(async (): Promise<AdminUser | null> => (await getAdminAccess()).admin);
 
 /**
  * Require an admin session for a server action / route handler.

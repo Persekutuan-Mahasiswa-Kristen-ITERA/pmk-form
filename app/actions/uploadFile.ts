@@ -1,7 +1,9 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { putAttachment } from "@/lib/r2";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { MAX_FILE_SIZE_BYTES } from "@/lib/file-upload-limits";
 
@@ -68,12 +70,13 @@ function validateFileType(file: File): string | null {
  *
  * FormData keys:
  * - file: File
- * - formId: UUID from public.forms
+ * - formId: UUID from form.forms
  * - respondentKey: optional non-sensitive path segment; defaults to "anonymous"
  *
- * Files are stored in the generic `form-attachments` bucket. This action does
- * not inspect recruitment-specific identifiers, so surveys/presence forms can
- * use the same workflow. The bucket and policies are created in migration 001.
+ * Files go to the PRIVATE R2 bucket (lib/r2.ts). The action returns the object key, which the
+ * form stores as the answer; admins open it through /admin/attachments. Uploads are only accepted
+ * for a form that is open right now and has at least one file_upload field, so the bucket cannot be
+ * used as free storage through some other form id.
  */
 export async function uploadFormAttachment(formData: FormData) {
   try {
@@ -118,23 +121,35 @@ export async function uploadFormAttachment(formData: FormData) {
     const safeFileName = file.name
       .replace(/[^a-zA-Z0-9.-]/g, "_")
       .slice(0, MAX_FILE_NAME_LENGTH);
-    const objectPath = `${formId}/${safeRespondentKey}/${Date.now()}-${safeFileName}`;
-
-    const supabase = await createClient();
-    const { error } = await supabase.storage
-      .from("form-attachments")
-      .upload(objectPath, file, { upsert: false });
-
-    if (error) {
-      console.error("Form attachment upload error", error);
-      throw new Error(`Gagal mengunggah lampiran: ${error.message}`);
+    const supabase = createServiceClient();
+    const { data: form } = await supabase
+      .from("forms")
+      .select("id, is_open, is_deleted, open_date, close_date, form_fields")
+      .eq("id", formId)
+      .maybeSingle();
+    const now = Date.now();
+    const acceptsFiles =
+      !!form &&
+      form.is_open === true &&
+      form.is_deleted !== true &&
+      new Date(form.open_date).getTime() <= now &&
+      new Date(form.close_date).getTime() >= now &&
+      Array.isArray(form.form_fields) &&
+      form.form_fields.some((f: { type?: string }) => f?.type === "file_upload");
+    if (!acceptsFiles) {
+      throw new Error("Form tidak menerima lampiran saat ini.");
     }
 
-    const { data } = supabase.storage
-      .from("form-attachments")
-      .getPublicUrl(objectPath);
+    const objectKey = `${formId.toLowerCase()}/${safeRespondentKey}/${now}-${randomBytes(4).toString("hex")}-${safeFileName}`;
 
-    return { success: true as const, url: data.publicUrl, path: objectPath };
+    try {
+      await putAttachment(objectKey, new Uint8Array(await file.arrayBuffer()), file.type);
+    } catch (error) {
+      console.error("Form attachment upload error", error);
+      throw new Error("Gagal mengunggah lampiran. Silakan coba lagi.");
+    }
+
+    return { success: true as const, key: objectKey };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gagal mengunggah lampiran.";
     return { success: false as const, error: message };
