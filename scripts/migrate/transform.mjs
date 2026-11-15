@@ -2,16 +2,29 @@
 // No network here, so they can be unit tested (tests/migrate-transform.test.ts).
 import { randomBytes } from "node:crypto";
 
-export const OLD_BUCKET = "form-attachments";
-const PUBLIC_MARKER = `/storage/v1/object/public/${OLD_BUCKET}/`;
+// Both public buckets of the old project: form-attachments (generic forms) and recruitment-files
+// (the older oprec flow, still referenced by migrated responses).
+export const OLD_BUCKETS = ["form-attachments", "recruitment-files"];
 const KEY_TAIL_RE = /^([0-9]{10,16})-(.+)$/;
 
-/** Old public URL (or bare bucket path) -> bucket path, or null when it is not an old attachment. */
+/**
+ * Old public URL -> "<bucket>/<path>" (a stable id for the file), or null when the value is not an
+ * attachment of one of the old buckets.
+ */
 export function oldPathFromValue(value) {
   if (typeof value !== "string" || value === "") return null;
-  const i = value.indexOf(PUBLIC_MARKER);
-  if (i >= 0) return decodeURIComponent(value.slice(i + PUBLIC_MARKER.length).split("?")[0]);
+  for (const bucket of OLD_BUCKETS) {
+    const marker = `/storage/v1/object/public/${bucket}/`;
+    const i = value.indexOf(marker);
+    if (i >= 0) return `${bucket}/${decodeURIComponent(value.slice(i + marker.length).split("?")[0])}`;
+  }
   return null;
+}
+
+/** "<bucket>/<path>" -> { bucket, path } */
+export function splitOldPath(oldPath) {
+  const i = oldPath.indexOf("/");
+  return { bucket: oldPath.slice(0, i), path: oldPath.slice(i + 1) };
 }
 
 function safeSegment(s, max) {
@@ -26,9 +39,10 @@ function safeName(s) {
  * (the format lib/attachments.ts accepts). Anything else is placed under "<formId>/migrated/".
  */
 export function newKeyForOldPath(oldPath, formId, hex = randomBytes(4).toString("hex")) {
-  const parts = oldPath.split("/");
+  const { bucket, path } = splitOldPath(oldPath);
+  const parts = path.split("/");
   const fid = formId.toLowerCase();
-  if (parts.length === 3 && parts[0].toLowerCase() === fid) {
+  if (bucket === "form-attachments" && parts.length === 3 && parts[0].toLowerCase() === fid) {
     const m = KEY_TAIL_RE.exec(parts[2]);
     if (m) return `${fid}/${safeSegment(parts[1], 80)}/${m[1]}-${hex}-${safeName(m[2])}`;
   }

@@ -14,9 +14,10 @@
 //   OLD_SUPABASE_URL, OLD_SUPABASE_SERVICE_ROLE_KEY    old pmk-form project (read only)
 //   NEW_SUPABASE_URL, NEW_SUPABASE_SERVICE_ROLE_KEY    PI-CORE project (schema `form` must exist)
 //   R2_ACCOUNT_ID or R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
+//   BOOTSTRAP_ADMIN_EMAILS (optional) PI-CORE account email(s) to invite as the first admin(s)
 import { writeFileSync } from "node:fs";
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { OLD_BUCKET, newKeyForOldPath, rewriteResponse } from "./transform.mjs";
+import { OLD_BUCKETS, newKeyForOldPath, rewriteResponse, splitOldPath } from "./transform.mjs";
 
 const APPLY = process.argv.includes("--apply");
 const env = (name) => {
@@ -86,7 +87,8 @@ async function r2Exists(key) {
 
 async function copyFile(oldPath, newKey) {
   if (await r2Exists(newKey)) return "exists";
-  const res = await fetch(`${OLD.url}/storage/v1/object/${OLD_BUCKET}/${oldPath.split("/").map(encodeURIComponent).join("/")}`, {
+  const { bucket, path } = splitOldPath(oldPath);
+  const res = await fetch(`${OLD.url}/storage/v1/object/${bucket}/${path.split("/").map(encodeURIComponent).join("/")}`, {
     headers: headers(OLD),
   });
   if (res.status === 404 || res.status === 400) return "missing";
@@ -102,6 +104,30 @@ async function copyFile(oldPath, newKey) {
   );
   return "copied";
 }
+
+// Every object of the old buckets, recursively (folders have id === null in the Storage list API).
+async function listBucket(bucket, prefix = "") {
+  const out = [];
+  for (let offset = 0; ; offset += 1000) {
+    const res = await fetch(`${OLD.url}/storage/v1/object/list/${bucket}`, {
+      method: "POST",
+      headers: headers(OLD, { "Content-Type": "application/json" }),
+      body: JSON.stringify({ prefix, limit: 1000, offset, sortBy: { column: "name", order: "asc" } }),
+    });
+    if (!res.ok) throw new Error(`list ${bucket}/${prefix}: HTTP ${res.status}`);
+    const items = await res.json();
+    for (const it of items) {
+      const path = prefix ? `${prefix}/${it.name}` : it.name;
+      if (it.id === null) out.push(...(await listBucket(bucket, path)));
+      else out.push({ oldPath: `${bucket}/${path}`, size: it.metadata?.size ?? 0 });
+    }
+    if (items.length < 1000) return out;
+  }
+}
+
+// Full copy of both old buckets under archive/ (not reachable through the app; Cloudflare dashboard only).
+// Covers files that only the legacy oprec tables point to, and uploads no response points to.
+const ARCHIVE_PREFIX = "archive/old-project/";
 
 // Stable new keys across runs: reuse the plan of a previous run if present.
 let previous = {};
@@ -146,6 +172,10 @@ const newResponses = responses.map((r) => {
 const uniqueMoves = [...new Map(moves.map((m) => [m.oldPath, m])).values()];
 console.log(`attachments to move: ${uniqueMoves.length}`);
 
+const archive = [];
+for (const bucket of OLD_BUCKETS) archive.push(...(await listBucket(bucket)));
+console.log(`archive: ${archive.length} objects, ${(archive.reduce((a, o) => a + o.size, 0) / 1048576).toFixed(1)} MB -> ${ARCHIVE_PREFIX}`);
+
 // Old auth ids are dropped: admins re-link by email on their first PI-CORE login.
 const newForms = forms.map((f) => ({
   id: f.id, title: f.title, description: f.description, slug: f.slug, form_type: f.form_type,
@@ -159,9 +189,17 @@ const newAdmins = admins.map((a) => ({
 }));
 const newAudit = audit.map((a) => ({ ...a, actor_user_id: null }));
 
+// First admin(s) with a real PI-CORE account (old admins may have none). Added as an invite that turns
+// active on their first PI-CORE login. BOOTSTRAP_ADMIN_EMAILS="a@x,b@y"
+const bootstrap = (process.env.BOOTSTRAP_ADMIN_EMAILS || "")
+  .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
+  .filter((e) => !newAdmins.some((a) => a.email === e));
+const bootstrapRows = bootstrap.map((email) => ({ email, role: "super_admin", status: "invited" }));
+if (bootstrapRows.length) console.log(`bootstrap admins (invited): ${bootstrap.join(", ")}`);
+
 writeFileSync(
   "migrate-report.json",
-  JSON.stringify({ at: new Date().toISOString(), apply: APPLY, counts: { forms: forms.length, responses: responses.length, outbox: outbox.length, admins: admins.length, audit: audit.length, files: uniqueMoves.length }, keyMap }, null, 2)
+  JSON.stringify({ at: new Date().toISOString(), apply: APPLY, counts: { forms: forms.length, responses: responses.length, outbox: outbox.length, admins: admins.length, audit: audit.length, files: uniqueMoves.length, archive: archive.length }, keyMap }, null, 2)
 );
 console.log("plan saved to migrate-report.json (contains file paths, do not commit or share)");
 
@@ -179,12 +217,35 @@ for (const m of uniqueMoves) {
   else missing.push(m.oldPath);
 }
 console.log(`files: ${copied} copied, ${existed} already in R2, ${missing.length} missing in old bucket`);
+
+let archived = 0, archivedBefore = 0;
+const archiveMissing = [];
+for (const o of archive) {
+  const r = await copyFile(o.oldPath, ARCHIVE_PREFIX + o.oldPath);
+  if (r === "copied") archived++;
+  else if (r === "exists") archivedBefore++;
+  else archiveMissing.push(o.oldPath);
+}
+console.log(`archive: ${archived} copied, ${archivedBefore} already in R2, ${archiveMissing.length} failed`);
 if (missing.length) console.log("missing (answers keep the new key; admins will get 404):", missing.slice(0, 20));
 
 await upsert("forms", newForms);
 await upsert("form_responses", newResponses);
 await upsert("sheets_outbox", outbox);
 await upsert("admin_members", newAdmins);
+if (bootstrapRows.length) {
+  // Insert by email; an existing row for that email is left alone (no id in the payload).
+  const res = await fetch(`${NEW.url}/rest/v1/admin_members?on_conflict=email`, {
+    method: "POST",
+    headers: headers(NEW, {
+      "Content-Profile": "form",
+      "Content-Type": "application/json",
+      Prefer: "resolution=ignore-duplicates,return=minimal",
+    }),
+    body: JSON.stringify(bootstrapRows),
+  });
+  if (!res.ok) throw new Error(`bootstrap admins: HTTP ${res.status} ${await res.text()}`);
+}
 await upsert("admin_audit_log", newAudit);
 
 const after = {};
