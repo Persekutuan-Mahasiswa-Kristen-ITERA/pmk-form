@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-// @ts-expect-error plain .mjs helper without types
 import { newKeyForOldPath, oldPathFromValue, rewriteResponse } from "../scripts/migrate/transform.mjs";
 import { isAttachmentKeyForForm } from "@/lib/attachments";
 

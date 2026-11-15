@@ -16,7 +16,7 @@
 //   R2_ACCOUNT_ID or R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
 //   BOOTSTRAP_ADMIN_EMAILS (optional) PI-CORE account email(s) to invite as the first admin(s)
 import { writeFileSync } from "node:fs";
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { OLD_BUCKETS, newKeyForOldPath, rewriteResponse, splitOldPath } from "./transform.mjs";
 
 const APPLY = process.argv.includes("--apply");
