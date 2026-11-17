@@ -3,6 +3,7 @@ import { getAdminUser } from "@/lib/auth";
 import { AdminUsersClient } from "@/components/AdminUsersClient";
 import { AccessDeniedCard } from "@/components/access-denied";
 import { PageHeader } from "@/components/page-header";
+import { PICORE_URL } from "@/lib/picore";
 
 /**
  * Halaman manajemen admin (Fase 5-4).
@@ -27,8 +28,25 @@ export default async function AdminUsersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Manajemen Admin"
-        subtitle="Undang, aktifkan, atau hapus admin. Akses dikendalikan oleh allowlist (default-deny)."
+        subtitle="Daftar undangan admin (cara lama). Admin baru diatur di PI-CORE → Integrasi."
       />
+
+      <div className="rounded-2xl border border-accent/30 bg-[#FAF6F0] p-4 text-sm leading-relaxed text-foreground">
+        <p className="font-semibold">Admin pmk-form sekarang diatur di PI-CORE.</p>
+        <p className="mt-1 text-muted-foreground">
+          Tambahkan admin baru di{" "}
+          <a
+            href={`${PICORE_URL}/integrations/form`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-primary underline underline-offset-2"
+          >
+            PI-CORE → Integrasi → pmk-form
+          </a>
+          : per anggota, atau otomatis lewat role, posisi atau unit di periode aktif. Daftar undangan di bawah
+          adalah cara lama dan tetap berlaku sampai dihapus.
+        </p>
+      </div>
 
       <AdminUsersClient members={members} currentUserId={admin.id} />
     </div>
