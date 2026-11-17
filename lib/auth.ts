@@ -4,8 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * Admin identity derived from the current request session.
  *
- * Authorization model (Fase 5): a user is an admin if and only if they have
- * an ACTIVE row in `form.admin_members` (email allowlist, invite-only).
+ * Authorization model: a user is an admin if PI-CORE gives them the app role `admin` for app
+ * `form` (PI-CORE > Integrasi > pmk-form, D-16), or they have an ACTIVE row in the legacy
+ * invite list `form.admin_members`.
  * This is DEFAULT-DENY — an authenticated user with no allowlist row (or a
  * DISABLED row) has no admin access at all.
  *
@@ -75,6 +76,22 @@ export const getAdminAccess = cache(async (): Promise<AdminAccess> => {
   if (!status.is_active) return { admin: null, denial: "inactive" };
   if (status.must_change_password) return { admin: null, denial: "must_change_password" };
 
+  // PI-CORE > Integrasi > pmk-form (D-16): the app role `admin` is enough on its own.
+  const { data: appRoles } = await supabase.schema("public").rpc("my_app_roles", { p_app: "form" });
+  if (Array.isArray(appRoles) && appRoles.includes("admin")) {
+    return {
+      admin: {
+        id: user.id,
+        email: user.email,
+        role: "super_admin", // one admin level (see above)
+        memberEmail: (user.email ?? "").toLowerCase(),
+        status: "active",
+      },
+      denial: null,
+    };
+  }
+
+  // Legacy invite list (form.admin_members), still honoured while admins move to PI-CORE.
   const loadMember = () =>
     supabase
       .from("admin_members")

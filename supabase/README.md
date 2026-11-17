@@ -6,7 +6,7 @@ pmk-form lives in the **same Supabase project as PI-CORE and PMK-NEXUS**:
 |---|---|
 | Tables | schema `form` (`forms`, `form_responses`, `sheets_outbox`, `admin_members`, `admin_audit_log`, later `legacy_*`) |
 | Login | PI-CORE's Supabase Auth. Accounts are made in PI-CORE; no sign-up. Password, or "Masuk dengan Google" through PI-CORE (PI-CORE D-14, `lib/google-login.ts`) |
-| Admins | invite by email in `/admin/users` (`form.admin_members`). The invite turns active when a PI-CORE account with that email signs in to pmk-form. Deactivated PI-CORE members and accounts on a temporary password are refused |
+| Admins | **PI-CORE → Integrasi → pmk-form** (app `form`, role `admin`; per member, role, position or unit), checked by `form.is_admin()` through `public.my_app_roles('form')`. The legacy invite list (`form.admin_members`, `/admin/users`) still works next to it until removed. Deactivated PI-CORE members and accounts on a temporary password are refused either way |
 | Files | Cloudflare R2, **private** bucket. Rows store object keys; admins open files through `/admin/attachments` |
 
 pmk-form owns schema `form` only. Nothing here alters PI-CORE's `public`/`private` schemas; `form` functions read `public.members` and `auth.users` for the caller only.
@@ -14,6 +14,7 @@ pmk-form owns schema `form` only. Nothing here alters PI-CORE's `public`/`privat
 | Path | What |
 |---|---|
 | `migrations/20261116100000_form_schema.sql` | Schema `form`: tables, RLS, `is_admin()`, `my_picore_status()`, `link_admin_user_id()`, `picore_account_exists()` (final state of the old migrations 001-016) |
+| `migrations/20261118200000_form_admin_from_picore.sql` | `is_admin()` also accepts PI-CORE's app role (needs PI-CORE migration `20261118100000_app_access`) |
 | `tests/form_access.test.sql` | Access tests per persona (local only, rolled back) |
 | `local/seed_test_accounts.sql` | FAKE `@form.test` accounts for the local stack (refuses to run on a real database) |
 | `config.toml` | Local stack (ports 56430-56439) |

@@ -94,4 +94,22 @@ select pg_temp.as_user('member@form.test');
 select pg_temp.check((select count(*) from public.members) = 1, 'PI-CORE RLS unchanged: member sees own row only');
 reset role;
 
+-- 9. Admin through PI-CORE > Integrasi (app `form`, role `admin`), next to the invite list
+select pg_temp.as_user('member@form.test');
+select pg_temp.check(not form.is_admin(), 'member without invite or rule is not admin');
+reset role;
+insert into public.app_access_rules (app_key, app_role_key, subject_type, member_id, note)
+select 'form', 'admin', 'member', m.id, 'test' from public.members m where m.email in ('member@form.test', 'temppw@form.test');
+select pg_temp.as_user('member@form.test');
+select pg_temp.check(form.is_admin(), 'PI-CORE rule makes a member admin without an invite');
+select pg_temp.check((select count(*) from form.forms) = 1, 'rule admin sees all forms');
+reset role;
+select pg_temp.as_user('temppw@form.test');
+select pg_temp.check(not form.is_admin(), 'PI-CORE rule does not help a temporary password');
+reset role;
+update public.app_access_rules set is_enabled = false where app_key = 'form' and note = 'test';
+select pg_temp.as_user('member@form.test');
+select pg_temp.check(not form.is_admin(), 'disabled PI-CORE rule gives nothing');
+reset role;
+
 rollback;
