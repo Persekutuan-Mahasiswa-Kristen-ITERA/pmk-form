@@ -5,7 +5,7 @@ pmk-form lives in the **same Supabase project as PI-CORE and PMK-NEXUS**:
 | Thing | Where |
 |---|---|
 | Tables | schema `form` (`forms`, `form_responses`, `sheets_outbox`, `admin_members`, `admin_audit_log`, later `legacy_*`) |
-| Login | PI-CORE's Supabase Auth. Accounts are made in PI-CORE; no sign-up, no Google login |
+| Login | PI-CORE's Supabase Auth. Accounts are made in PI-CORE; no sign-up. Password, or "Masuk dengan Google" through PI-CORE (PI-CORE D-14, `lib/google-login.ts`) |
 | Admins | invite by email in `/admin/users` (`form.admin_members`). The invite turns active when a PI-CORE account with that email signs in to pmk-form. Deactivated PI-CORE members and accounts on a temporary password are refused |
 | Files | Cloudflare R2, **private** bucket. Rows store object keys; admins open files through `/admin/attachments` |
 
