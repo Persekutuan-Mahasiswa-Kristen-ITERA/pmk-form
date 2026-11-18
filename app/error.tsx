@@ -39,7 +39,7 @@ export default function RootError({
             Terjadi kesalahan
           </h1>
           <p className="mx-auto max-w-md text-sm leading-relaxed text-muted-foreground md:text-base">
-            Maaf, sesuatu tidak berjalan semestanya. Coba muat ulang halaman
+            Maaf, sesuatu tidak berjalan semestinya. Coba muat ulang halaman
             ini. Bila masalah tetap berlanjut, kembali ke beranda dan coba
             beberapa saat lagi.
           </p>

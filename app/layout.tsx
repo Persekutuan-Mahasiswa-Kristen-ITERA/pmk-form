@@ -18,7 +18,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "PMK ITERA — Open Recruitment Portal",
+  title: "Portal Formulir PMK ITERA",
   description: "Portal pendaftaran pelayanan dan kepanitiaan di PMK ITERA",
   icons: {
     icon: "/pmk-logo.avif",
