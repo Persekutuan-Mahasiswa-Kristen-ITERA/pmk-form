@@ -1,6 +1,6 @@
 import React from "react";
 import { notFound } from "next/navigation";
-import { getFormById, getAllFormResponses } from "@/lib/forms";
+import { getFormById, getAllFormResponses, resolveFormFields } from "@/lib/forms";
 import dynamic from "next/dynamic";
 import { ResponsesTableSkeleton } from "@/components/skeleton";
 
@@ -28,5 +28,9 @@ export default async function FormResponsesPage({
 
   const responses = await getAllFormResponses(id);
 
-  return <GenericResponseTable form={form} responses={responses} />;
+  // Tampilkan field yang sama dengan yang diisi pendaftar, termasuk identitas
+  // otomatis (Nama/NIM/Email/Angkatan) — juga untuk CSV dan nama folder ZIP.
+  const resolvedForm = { ...form, form_fields: resolveFormFields(form) };
+
+  return <GenericResponseTable form={resolvedForm} responses={responses} />;
 }

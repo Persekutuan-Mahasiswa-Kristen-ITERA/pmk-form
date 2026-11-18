@@ -9,6 +9,7 @@ import {
   readExistingIds,
 } from "@/lib/sheets/client";
 import { buildRow, sanitizeError, backoffMinutes } from "@/lib/sheets/format";
+import { resolveFormFieldsIdentityLast } from "@/lib/forms";
 import type { FieldConfig } from "@/types/forms";
 
 /**
@@ -50,7 +51,7 @@ export async function syncOne(responseId: string): Promise<{
   // Form + respons.
   const { data: form, error: formError } = await supabase
     .from("forms")
-    .select("id, form_fields, sheets_config")
+    .select("id, form_fields, settings, sheets_config")
     .eq("id", outbox.form_id)
     .single();
   if (formError || !form) {
@@ -72,7 +73,7 @@ export async function syncOne(responseId: string): Promise<{
     return { status: "failed", error: "Respons tidak ditemukan." };
   }
 
-  const fields = (form.form_fields ?? []) as FieldConfig[];
+  const fields: FieldConfig[] = resolveFormFieldsIdentityLast(form);
 
   try {
     // Header ( tulis ulang saat field berubah; aman/idempoten).
@@ -148,7 +149,7 @@ export async function syncFormBatch(formId: string): Promise<{
   // Ambil form + config.
   const { data: form, error: formError } = await supabase
     .from("forms")
-    .select("id, form_fields, sheets_config")
+    .select("id, form_fields, settings, sheets_config")
     .eq("id", formId)
     .single();
   if (formError || !form) {
@@ -183,7 +184,7 @@ export async function syncFormBatch(formId: string): Promise<{
     return { processed: responseIds.length, synced: 0, error: "Gagal memuat respons." };
   }
 
-  const fields = (form.form_fields ?? []) as FieldConfig[];
+  const fields: FieldConfig[] = resolveFormFieldsIdentityLast(form);
 
   try {
     // Header dulu (idempoten), lalu kumpulkan id yang sudah ada di sheet.

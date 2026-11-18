@@ -36,3 +36,13 @@ test("buildFormSchema: validation minLength/maxLength/pattern", () => {
   assert.equal(schema.safeParse({ kode: "ABCDEF" }).success, false);
   assert.equal(schema.safeParse({ kode: "abc" }).success, false);
 });
+
+test("buildFormSchema: email/URL opsional yang dikirim kosong ('') tetap lolos", () => {
+  const schema = buildFormSchema([
+    { id: "e", type: "email", label: "Email" },
+    { id: "u", type: "url", label: "Tautan" },
+  ]);
+  assert.equal(schema.safeParse({ e: "", u: "" }).success, true);
+  assert.equal(schema.safeParse({ e: "bukan-email", u: "" }).success, false);
+  assert.equal(schema.safeParse({ e: "", u: "bukan url" }).success, false);
+});

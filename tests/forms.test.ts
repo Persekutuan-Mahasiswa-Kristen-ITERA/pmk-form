@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isFormActive, resolveFormFields, normalizeNim, duplicateSlugCandidate } from "@/lib/forms";
+import { isFormActive, resolveFormFields, resolveFormFieldsIdentityLast, normalizeNim, duplicateSlugCandidate } from "@/lib/forms";
 import type { FieldConfig } from "@/types/forms";
 
 test("isFormActive: hanya true bila is_open + rentang tanggal valid", () => {
@@ -71,4 +71,14 @@ test("auditBestEffort(): menelan error DB (best-effort)", async () => {
   const m = await import("@/lib/audit");
   // Tidak melempar — jika tidak, aksi utama akan gagal hanya karena audit gagal.
   await m.auditBestEffort("form_toggle", { id: "x" });
+});
+
+test("resolveFormFieldsIdentityLast: identitas di akhir, kolom lama tetap di posisinya", () => {
+  const fields: FieldConfig[] = [
+    { id: "a", type: "text", label: "A" },
+    { id: "field_applicant_nim", type: "text", label: "NIM sendiri" },
+  ];
+  const ids = resolveFormFieldsIdentityLast({ form_fields: fields, settings: { collect_identity: true } }).map((f) => f.id);
+  assert.deepEqual(ids, ["a", "field_applicant_nim", "field_applicant_name", "field_applicant_email", "field_applicant_angkatan"]);
+  assert.deepEqual(resolveFormFieldsIdentityLast({ form_fields: fields, settings: {} }), fields);
 });

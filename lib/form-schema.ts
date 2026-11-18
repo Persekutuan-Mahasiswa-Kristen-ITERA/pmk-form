@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { FieldConfig } from "@/types/forms";
 
+/** Optional fields: the renderer may send "" for an untouched input. */
+const emptyToNull = (v: unknown) => (v === "" ? null : v);
+
 /**
  * Build a Zod object schema from a form's field configuration.
  *
@@ -55,13 +58,13 @@ export function buildFormSchema(fields: FieldConfig[]) {
         // F2 helper text: optional field menerima null/kosong (client kirim null).
         shape[field.id] = field.required
           ? z.string().min(1, `${field.label} wajib diisi.`).email(`${field.label} harus berupa email yang valid.`)
-          : z.string().email(`${field.label} harus berupa email yang valid.`).nullish();
+          : z.preprocess(emptyToNull, z.string().email(`${field.label} harus berupa email yang valid.`).nullish());
         break;
 
       case "url":
         shape[field.id] = field.required
           ? z.string().min(1, `${field.label} wajib diisi.`).url(`${field.label} harus berupa URL yang valid.`)
-          : z.string().url(`${field.label} harus berupa URL yang valid.`).nullish();
+          : z.preprocess(emptyToNull, z.string().url(`${field.label} harus berupa URL yang valid.`).nullish());
         break;
 
       case "number":
