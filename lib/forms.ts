@@ -99,6 +99,21 @@ export function resolveFormFields(form: {
 }
 
 /**
+ * Sama seperti resolveFormFields, tetapi field identitas ditaruh di AKHIR.
+ * Dipakai untuk Google Sheets: kolom lama tetap di posisinya, jadi baris yang
+ * sudah tertulis sebelum perbaikan ini tidak bergeser terhadap header baru.
+ */
+export function resolveFormFieldsIdentityLast(form: {
+  form_fields?: FieldConfig[] | null;
+  settings?: FormSettings | null;
+}): FieldConfig[] {
+  const own = (form.form_fields ?? []) as FieldConfig[];
+  const ownIds = new Set(own.map((f) => f.id));
+  const injected = resolveFormFields(form).filter((f) => !ownIds.has(f.id));
+  return [...own, ...injected];
+}
+
+/**
  * Terapkan filter "form aktif" ke sebuah query builder Supabase pada `forms`.
  *
  * CATATAN: supabase-js memakai tipe builder yang sangat dalam; membungkusnya

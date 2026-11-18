@@ -84,7 +84,8 @@ export function GenericResponseTable({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   // Fase 7-3: filter status di tabel admin.
-  const [statusFilter, setStatusFilter] = useState<ResponseStatus | "all">("all");
+  // "unprocessed" = belum diberi status (status null di database).
+  const [statusFilter, setStatusFilter] = useState<ResponseStatus | "all" | "unprocessed">("all");
   const { toast } = useToast();
 
   const fields = form.form_fields || [];
@@ -93,7 +94,9 @@ export function GenericResponseTable({
   const visibleResponses =
     statusFilter === "all"
       ? responses
-      : responses.filter((r) => (r.status ?? null) === statusFilter);
+      : statusFilter === "unprocessed"
+        ? responses.filter((r) => r.status == null)
+        : responses.filter((r) => r.status === statusFilter);
 
   const handleDelete = async (id: string) => {
     setIsDeleting(true);
@@ -237,7 +240,7 @@ export function GenericResponseTable({
           {/* Fase 7-3: filter berdasarkan status seleksi. */}
           <Select
             value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v as ResponseStatus | "all")}
+            onValueChange={(v) => setStatusFilter(v as ResponseStatus | "all" | "unprocessed")}
           >
             <SelectTrigger className="w-[170px] h-9 text-xs rounded-lg">
               <Filter className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
@@ -245,7 +248,7 @@ export function GenericResponseTable({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all" className="text-xs">Semua status</SelectItem>
-              <SelectItem value="null" className="text-xs">Belum diproses</SelectItem>
+              <SelectItem value="unprocessed" className="text-xs">Belum diproses</SelectItem>
               <SelectItem value="diterima" className="text-xs">Diterima</SelectItem>
               <SelectItem value="tidak_lolos" className="text-xs">Tidak Lolos</SelectItem>
               <SelectItem value="cadangan" className="text-xs">Cadangan</SelectItem>

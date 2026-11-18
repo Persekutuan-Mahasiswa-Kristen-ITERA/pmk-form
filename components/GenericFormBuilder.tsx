@@ -49,6 +49,7 @@ import { useToast } from "@/hooks/use-toast";
 import { createFormAction, updateFormAction } from "@/app/actions/forms";
 import { revalidateForm } from "@/app/actions/revalidate";
 import type { Form, FieldConfig, FieldType, FormType, FormSettings } from "@/types/forms";
+import { toDateTimeLocal } from "@/lib/datetime-local";
 
 const FIELD_TYPES: { type: FieldType; label: string; description: string }[] = [
   { type: "short_text", label: "Teks Pendek", description: "Input satu baris (nama, judul, dsb)" },
@@ -186,13 +187,13 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
   const [isOpen, setIsOpen] = useState(initialData?.is_open ?? true);
   const [openDate, setOpenDate] = useState(() =>
     initialData?.open_date
-      ? new Date(initialData.open_date).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16)
+      ? toDateTimeLocal(new Date(initialData.open_date))
+      : toDateTimeLocal(new Date())
   );
   const [closeDate, setCloseDate] = useState(() =>
     initialData?.close_date
-      ? new Date(initialData.close_date).toISOString().slice(0, 16)
-      : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+      ? toDateTimeLocal(new Date(initialData.close_date))
+      : toDateTimeLocal(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000))
   );
   const [fields, setFields] = useState<FieldConfig[]>(initialData?.form_fields || []);
   const [settings, setSettings] = useState<FormSettings>(
