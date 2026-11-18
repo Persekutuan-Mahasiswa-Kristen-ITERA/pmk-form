@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { FormType } from "@/types/forms";
 import { isFormActive } from "@/lib/forms";
+import { isClosingSoon } from "@/lib/format";
 
 /**
  * Komponen UI bersama untuk landing page (Fase 2-5).
@@ -92,15 +93,12 @@ export function computeFormStats(
 ) {
   const active = forms.filter((f) => isFormActive(f));
   const now = Date.now();
-  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
   return {
     total: forms.length,
     activeCount: active.length,
-    /** Form aktif yang tutup dalam <= 7 hari. */
-    closingSoon: active.filter(
-      (f) => f.close_date && new Date(f.close_date).getTime() - now <= WEEK_MS
-    ).length,
+    /** Form aktif yang tutup dalam <= CLOSING_SOON_DAYS hari. */
+    closingSoon: active.filter((f) => isClosingSoon(f.close_date, now)).length,
     /** Form non-aktif: flag is_open mati ATAU sudah lewat close_date. */
     closed: forms.length - active.length,
   };

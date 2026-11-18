@@ -17,6 +17,7 @@
  * - tombol kirim menonaktifkan diri saat proses (cegah double submit).
  */
 import { useState, useRef } from "react";
+import { formatDeadline } from "@/lib/format";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -288,11 +289,7 @@ export function GenericFormRenderer({ form: genericForm }: { form: GenericForm }
           )}
           <p className="mt-2 text-xs text-muted-foreground">
             Jenis: <span className="font-semibold capitalize">{genericForm.form_type}</span> • Tutup:{" "}
-            {new Date(genericForm.close_date).toLocaleDateString("id-ID", {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
+            {formatDeadline(genericForm.close_date)}
           </p>
 
           {showProgress && requiredFieldIds.length > 0 ? (

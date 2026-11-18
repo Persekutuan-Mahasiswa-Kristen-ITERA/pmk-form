@@ -188,3 +188,26 @@ export function bucketizeByMonth(
 
   return counts;
 }
+
+/**
+ * Ambang "segera ditutup" (hari) yang sama di kartu publik, statistik landing,
+ * badge status, dan dashboard admin. Dulu kartu memakai 3 hari, yang lain 7.
+ */
+export const CLOSING_SOON_DAYS = 7;
+
+/** True bila `closeDate` jatuh dalam CLOSING_SOON_DAYS ke depan (dan belum lewat). */
+export function isClosingSoon(closeDate: string | Date | null | undefined, now: number = Date.now()): boolean {
+  if (!closeDate) return false;
+  const ms = new Date(closeDate).getTime() - now;
+  return ms >= 0 && ms <= CLOSING_SOON_DAYS * 24 * 60 * 60 * 1000;
+}
+
+/** "18 November 2026, 23.59 WIB" — tenggat lengkap dengan jam tutup. */
+export function formatDeadline(date: string | Date | null | undefined): string {
+  if (!date) return "";
+  const parsed = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(parsed.getTime())) return "";
+  const day = new Intl.DateTimeFormat(ID, { ...FORMAT_OPTIONS.long, timeZone: WIB }).format(parsed);
+  const time = new Intl.DateTimeFormat(ID, { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: WIB }).format(parsed);
+  return `${day}, ${time} WIB`;
+}

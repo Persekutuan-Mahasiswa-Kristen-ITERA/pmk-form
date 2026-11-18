@@ -15,6 +15,8 @@
  * Semua fungsi murni (pure) supaya bisa diuji unit tanpa env/DB.
  */
 
+import { CLOSING_SOON_DAYS } from "@/lib/format";
+
 /**
  * Definisi tunggal "form aktif" (Fase 2-4).
  *
@@ -46,8 +48,8 @@ export interface FormStatus {
   label: string;
 }
 
-/** Ambang batas "segera ditutup" (hari). Sama dengan `computeFormStats`. */
-export const CLOSING_SOON_DAYS = 7;
+/** Ambang batas "segera ditutup" (hari); didefinisikan di lib/format agar dipakai bersama. */
+export { CLOSING_SOON_DAYS };
 
 /**
  * Status tampilan sebuah form untuk `StatusBadge`.
