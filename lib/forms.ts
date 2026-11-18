@@ -37,7 +37,7 @@ export { isFormActive } from "@/lib/form-status";
  * Field identitas otomatis (Fase 3-2a).
  *
  * `settings.collect_identity` ditawarkan builder sebagai toggle "Kumpulkan
- * Identitas Otomatis (Nama/NIM/Email/Prodi)" tetapi sebelumnya TIDAK
+ * Identitas Otomatis (Nama/NIM/Email/Angkatan)" tetapi sebelumnya TIDAK
  * diimplementasikan di renderer/server — form yang aktif toggle-nya tidak
  * mengumpulkan identitas apa pun. 7 dari 8 form produksi memakainya.
  *
@@ -87,6 +87,9 @@ export function resolveFormFields(form: {
       label: "Angkatan",
       required: false,
       placeholder: "contoh: 2023",
+      ...(allowedAngkatan(settings).length
+        ? { helpText: `Formulir ini khusus angkatan ${allowedAngkatan(settings).join(", ")}.` }
+        : {}),
     },
   ];
 
@@ -111,6 +114,32 @@ export function resolveFormFieldsIdentityLast(form: {
   const ownIds = new Set(own.map((f) => f.id));
   const injected = resolveFormFields(form).filter((f) => !ownIds.has(f.id));
   return [...own, ...injected];
+}
+
+/** Tahun angkatan yang diizinkan (settings.allowed_angkatan), sudah diurutkan. */
+export function allowedAngkatan(settings?: FormSettings | null): number[] {
+  const list = (settings?.allowed_angkatan ?? []).filter((n) => Number.isInteger(n));
+  return [...new Set(list)].sort((a, b) => a - b);
+}
+
+/**
+ * "Persyaratan Angkatan" dari builder. Mengembalikan pesan galat bila jawaban
+ * Angkatan (identitas otomatis) tidak termasuk tahun yang diizinkan.
+ *
+ * Kolom Angkatan sifatnya opsional, jadi jawaban kosong TIDAK diblokir; panitia
+ * tetap bisa menyaring di tabel respons. Yang dicek hanya angka 4 digit pertama.
+ */
+export function checkAllowedAngkatan(
+  settings: FormSettings | null | undefined,
+  answers: Record<string, unknown>,
+): string | null {
+  const allowed = allowedAngkatan(settings);
+  if (!allowed.length) return null;
+  const raw = answers[IDENTITY_FIELD_IDS.angkatan];
+  if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+  const year = Number(String(raw).match(/\d{4}/)?.[0]);
+  if (allowed.includes(year)) return null;
+  return `Formulir ini khusus angkatan ${allowed.join(", ")}.`;
 }
 
 /**

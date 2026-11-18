@@ -133,3 +133,19 @@ test("bucketizeByMonth: bucket kosong tetap muncul dengan nilai 0", () => {
   const counts = bucketizeByMonth([], buckets);
   assert.deepEqual(counts, { "2026-09": 0, "2026-10": 0 });
 });
+
+test("formatDeadline: tanggal + jam WIB", async () => {
+  const { formatDeadline } = await import("@/lib/format");
+  // 18 Nov 2026 16:59 UTC = 23.59 WIB
+  assert.equal(formatDeadline("2026-11-18T16:59:00Z"), "18 November 2026, 23.59 WIB");
+  assert.equal(formatDeadline(null), "");
+});
+
+test("isClosingSoon: dalam 7 hari ke depan, bukan yang sudah lewat", async () => {
+  const { isClosingSoon } = await import("@/lib/format");
+  const now = Date.parse("2026-11-18T00:00:00Z");
+  assert.equal(isClosingSoon("2026-11-20T00:00:00Z", now), true);
+  assert.equal(isClosingSoon("2026-11-25T00:00:00Z", now), true);
+  assert.equal(isClosingSoon("2026-11-26T00:00:01Z", now), false);
+  assert.equal(isClosingSoon("2026-11-17T00:00:00Z", now), false);
+});

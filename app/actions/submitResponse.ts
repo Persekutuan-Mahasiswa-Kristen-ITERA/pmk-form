@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { after } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isAttachmentKeyForForm } from "@/lib/attachments";
-import { checkDuplicateResponse, isFormActive, resolveFormFields, normalizeNim } from "@/lib/forms";
+import { checkAllowedAngkatan, checkDuplicateResponse, isFormActive, resolveFormFields, normalizeNim } from "@/lib/forms";
 import { syncOne } from "@/lib/sheets/sync";
 import { buildFormSchema } from "@/lib/form-schema";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
@@ -175,6 +175,12 @@ export async function submitFormResponseAction(input: {
         success: false as const,
         error: first?.message ?? "Terdapat jawaban yang tidak valid.",
       };
+    }
+
+    // 2b. "Persyaratan Angkatan" (settings.allowed_angkatan) from the builder.
+    const angkatanError = checkAllowedAngkatan(settings, validated.data as Record<string, unknown>);
+    if (angkatanError) {
+      return { success: false as const, error: angkatanError };
     }
 
     // 3. Enforce max_responses before accepting the write. Note this is a

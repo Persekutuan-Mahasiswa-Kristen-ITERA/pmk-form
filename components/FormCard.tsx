@@ -1,6 +1,7 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, ChevronRight } from "lucide-react";
+import { formatDeadline, isClosingSoon } from "@/lib/format";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
@@ -14,7 +15,7 @@ interface FormCardProps {
 
 export function FormCard({ slug, title, description, closeDate, formType }: FormCardProps) {
     const deadline = new Date(closeDate);
-    const isClosingSoon = deadline.getTime() - new Date().getTime() < 3 * 24 * 60 * 60 * 1000; // 3 days
+    const closingSoon = isClosingSoon(deadline);
 
     // Semua jenis form sekarang memakai route generik /form/[slug] (Fase 1).
     // Cabang lama isRecruitment ? `/form/${slug}` : `/form/${slug}` selalu
@@ -38,7 +39,7 @@ export function FormCard({ slug, title, description, closeDate, formType }: Form
                     <Badge className={`capitalize text-[10px] ${badgeColors[formType] || badgeColors.general}`}>
                         {formType}
                     </Badge>
-                    {isClosingSoon && (
+                    {closingSoon && (
                         <div className="flex items-center text-xs text-destructive font-semibold bg-destructive/10 px-2 py-0.5 rounded-full">
                             <Clock className="w-3 h-3 mr-1" /> Segera Ditutup
                         </div>
@@ -54,7 +55,7 @@ export function FormCard({ slug, title, description, closeDate, formType }: Form
             <CardContent className="flex-grow space-y-2">
                 <div className="flex items-center text-xs text-foreground/80 font-medium">
                     <Calendar className="w-3.5 h-3.5 mr-2 text-primary" />
-                    Batas: {deadline.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    Batas: {formatDeadline(deadline)}
                 </div>
             </CardContent>
             <CardFooter>

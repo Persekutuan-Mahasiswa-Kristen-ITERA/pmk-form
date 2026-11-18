@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { MAX_FILE_SIZE_KB } from "@/lib/file-upload-limits";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -58,7 +59,7 @@ const FIELD_TYPES: { type: FieldType; label: string; description: string }[] = [
   { type: "phone", label: "Nomor Telepon", description: "Input angka untuk nomor telepon/WhatsApp" },
   { type: "url", label: "URL / Tautan", description: "Input tautan web dengan validasi format" },
   { type: "number", label: "Angka", description: "Input angka saja" },
-  { type: "dropdown", label: "Dropdown (Pilihan Tunggal)", description: "Daftar pilihan bertingkat" },
+  { type: "dropdown", label: "Dropdown (Pilihan Tunggal)", description: "Pilih satu dari daftar (menu tarik-turun)" },
   { type: "radio", label: "Radio Button", description: "Pilihan tunggal berbentuk tombol radio" },
   { type: "checkbox", label: "Checkbox (Pilihan Berganda)", description: "Pilihan yang bisa dicentang lebih dari satu" },
   { type: "date", label: "Tanggal", description: "Pemilih tanggal" },
@@ -148,7 +149,7 @@ function SortableFieldItem({
         </div>
         <div className="space-y-1">
           <Label className="text-xs font-semibold">Teks Bantuan / Helper Text (Opsional)</Label>
-          <Input value={field.helpText || ""} onChange={(e) => onUpdate({ ...field, helpText: e.target.value })} placeholder="Contoh: Format PDF maks 10MB" />
+          <Input value={field.helpText || ""} onChange={(e) => onUpdate({ ...field, helpText: e.target.value })} placeholder={`Contoh: Format PDF, maks ${MAX_FILE_SIZE_KB} KB`} />
         </div>
       </div>
       {hasOptions && (
@@ -361,7 +362,7 @@ export function GenericFormBuilder({ initialData }: { initialData?: Form | null 
             )}
             <div className="flex items-center space-x-2 pt-2">
               <Switch id="collect-id" checked={settings.collect_identity ?? true} onCheckedChange={(val) => setSettings({ ...settings, collect_identity: val })} />
-              <Label htmlFor="collect-id" className="cursor-pointer">Kumpulkan Identitas Otomatis (Nama/NIM/Email/Prodi)</Label>
+              <Label htmlFor="collect-id" className="cursor-pointer">Kumpulkan Identitas Otomatis (Nama/NIM/Email/Angkatan)</Label>
             </div>
 
             {/* Fase 7-2: verifikasi anti-bot Cloudflare Turnstile di submit publik. */}

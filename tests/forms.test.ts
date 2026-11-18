@@ -82,3 +82,22 @@ test("resolveFormFieldsIdentityLast: identitas di akhir, kolom lama tetap di pos
   assert.deepEqual(ids, ["a", "field_applicant_nim", "field_applicant_name", "field_applicant_email", "field_applicant_angkatan"]);
   assert.deepEqual(resolveFormFieldsIdentityLast({ form_fields: fields, settings: {} }), fields);
 });
+
+test("checkAllowedAngkatan: tolak angkatan di luar daftar, terima kosong/cocok", async () => {
+  const { checkAllowedAngkatan } = await import("@/lib/forms");
+  const settings = { allowed_angkatan: [2025, 2024] };
+  assert.equal(checkAllowedAngkatan(settings, { field_applicant_angkatan: "2024" }), null);
+  assert.equal(checkAllowedAngkatan(settings, { field_applicant_angkatan: " 2025 " }), null);
+  assert.equal(checkAllowedAngkatan(settings, { field_applicant_angkatan: "" }), null);
+  assert.equal(checkAllowedAngkatan(settings, {}), null);
+  assert.equal(checkAllowedAngkatan(settings, { field_applicant_angkatan: "2023" }), "Formulir ini khusus angkatan 2024, 2025.");
+  assert.equal(checkAllowedAngkatan({}, { field_applicant_angkatan: "2019" }), null);
+});
+
+test("resolveFormFields: petunjuk angkatan muncul bila persyaratan diisi", () => {
+  const fields = resolveFormFields({ form_fields: [], settings: { collect_identity: true, allowed_angkatan: [2026, 2025] } });
+  const angkatan = fields.find((f) => f.id === "field_applicant_angkatan");
+  assert.equal(angkatan?.helpText, "Formulir ini khusus angkatan 2025, 2026.");
+  const plain = resolveFormFields({ form_fields: [], settings: { collect_identity: true } });
+  assert.equal(plain.find((f) => f.id === "field_applicant_angkatan")?.helpText, undefined);
+});
